@@ -2,33 +2,39 @@
 
 ## What Is the Thread Routing Module?
 
-The **Thread Routing Module (TRM)** is a domain-agnostic, reusable intelligence component that ingests a stream of discrete messages — each carrying text and metadata — and does two things simultaneously:
+The **Thread Routing Module (TRM)** is a domain-agnostic, reusable intelligence component that ingests a stream of `ProcessedPacket` objects — each carrying text and metadata — and does two things simultaneously:
 
 1. **Thread Routing** — classifies each message into a conversation thread (who is talking to whom, in sequence)
 2. **Event Correlation** — associates threads with real-world events (the thing being talked about)
 
 These are two distinct layers. A thread is a communication pattern. An event is a real-world occurrence. The TRM maintains both.
 
-It is not a radio module. It is not tied to any specific use case. The radio dispatch pipeline is one consumer of it. Others can be built by following the same pattern.
+It is not a radio module. It is not tied to any specific use case. It sits at the intelligence layer of any Albatross pipeline, consuming `ProcessedPacket` objects regardless of what domain produced them. The radio dispatch pipeline is one consumer. Others can be built by following the same pattern.
 
 ---
 
 ## Core Concepts
 
-### The Message Contract
+### The ProcessedPacket
 
-Every message passed to the TRM conforms to a single base schema:
+The TRM ingests `ProcessedPacket` objects. A `ProcessedPacket` is the abstract Albatross type that any domain-specific Packet becomes after preprocessing — whatever that preprocessing requires for that domain.
+
+For a text-based domain (e.g. a live social media feed), a Packet may already carry text in its payload, making preprocessing trivial or nonexistent. For an audio domain (e.g. radio), preprocessing is ASR — the Packet's audio payload is transcribed into text before the `ProcessedPacket` is emitted. Either way, the TRM receives the same thing.
+
+Every `ProcessedPacket` conforms to this schema:
 
 ```json
 {
   "id": "uuid",
   "timestamp": "ISO8601",
-  "text": "transcribed or raw message content",
+  "text": "processed text content",
   "metadata": {}
 }
 ```
 
-The `metadata` field is flexible. Each use case populates it with whatever fields are relevant to routing decisions for that domain. The TRM is told — via configuration or system prompt — what those fields mean and how much weight to give them.
+The `metadata` field carries domain-specific context forwarded from the upstream Packet — talk group IDs, source unit identifiers, department tags, or whatever signals are relevant to routing decisions in that domain. The TRM is told via configuration what those fields mean and how much weight to give them.
+
+> **Note on naming:** In the radio pipeline, the upstream Packet type is `TransmissionPacket` (defined in the Phase 1A spec) and the TRM input type is `ProcessedTransmissionPacket` — the radio-specific instantiation of `ProcessedPacket`. These are out of scope for this document. The TRM only knows about `ProcessedPacket`.
 
 ### The Thread
 
@@ -63,7 +69,7 @@ Thread ◀──has many── Event
 
 ### The Two-Layer Routing Decision
 
-For every incoming message, the TRM produces decisions at both layers:
+For every incoming `ProcessedPacket`, the TRM produces decisions at both layers:
 
 **Thread layer:**
 
@@ -82,7 +88,7 @@ For every incoming message, the TRM produces decisions at both layers:
 | `none` | Thread has no associated real-world event |
 | `unknown` | Cannot be confidently classified |
 
-These decisions are made independently. A message can join an existing thread while that thread is simultaneously being linked to a new event — for example, when a unit that was on routine patrol is suddenly dispatched to an incident mid-conversation.
+These decisions are made independently. A `ProcessedPacket` can join an existing thread while that thread is simultaneously being linked to a new event — for example, when a unit that was on routine patrol is suddenly dispatched to an incident mid-conversation.
 
 ---
 
@@ -172,7 +178,7 @@ Example scenarios:
   README.md                              # How to use the dataset, how to add scenarios
   /tier1_plain_conversation/
     /scenario_01_simple_two_party/
-      transmissions.json                 # Input messages
+      packets.json                       # Input ProcessedPackets
       expected_output.json               # Ground truth threads, events, and decisions
       README.md                          # Human description of what's happening
     /scenario_02_three_way_split/
@@ -192,7 +198,7 @@ Example scenarios:
 
 ## Scenario File Format
 
-### `transmissions.json`
+### `packets.json`
 
 ```json
 [
@@ -281,7 +287,7 @@ Example scenarios:
 }
 ```
 
-> Note how `msg_003` joins an existing thread but opens a new event — the conversation continues unbroken but a second real-world incident enters the picture. This illustrates the independence of the two routing layers and is a pattern that will appear frequently in real radio data.
+> Note how `msg_003` joins an existing thread but opens a new event — the conversation continues unbroken but a second real-world incident enters the picture. This illustrates the independence of the two routing layers and is a pattern that will appear frequently in real-world data.
 
 ---
 
@@ -323,22 +329,35 @@ When a model's output is compared against `expected_output.json`, the following 
 
 To adapt the TRM to a new domain, follow this pattern:
 
-1. Define the metadata fields relevant to your routing decisions
-2. Define what constitutes a "thread" vs. an "event" in your domain
-3. Write Tier 1 scenarios using the base schema (minimal metadata, plain language)
-4. Write Tier 2–4 scenarios with your domain's metadata populated
-5. Document what each metadata field means and its expected influence on thread and event routing
-6. Run against the TRM and score against your ground truth
-7. Tune the system prompt / config to reflect your domain's signal weights
+1. Define how your domain's Packets are preprocessed into `ProcessedPacket` objects — or confirm that no preprocessing is needed
+2. Define the metadata fields relevant to routing decisions in your domain
+3. Define what constitutes a "thread" vs. an "event" in your domain
+4. Write Tier 1 scenarios using the base `ProcessedPacket` schema (minimal metadata, plain language)
+5. Write Tier 2–4 scenarios with your domain's metadata populated
+6. Document what each metadata field means and its expected influence on thread and event routing
+7. Run against the TRM and score against your ground truth
+8. Tune the system prompt / config to reflect your domain's signal weights
 
 The Tier 1 scenarios from the original dataset remain valid baselines across all use cases.
 
 ---
 
-## Relationship to the Broader Project
+## Position in the Albatross Pipeline
 
-The TRM is one module in a larger pipeline. In the radio dispatch use case, the TRM sits between the transcription output and the event store. It receives transcribed messages with radio metadata and produces threaded, event-correlated output. Everything upstream and downstream is separate — the TRM only cares about the message contract.
+The TRM occupies the intelligence layer of any Albatross pipeline. It sits between preprocessing and analysis, consuming `ProcessedPacket` objects and emitting structured thread and event output.
 
 ```
-OP25 capture → ASR transcription → [Thread Routing Module] → Event store → Web UI
+Packet → [Preprocessing] → ProcessedPacket → [TRM] → Event store / Analysis
 ```
+
+Preprocessing is domain-dependent. It may be heavy (radio: ASR to convert audio to text) or near-absent (text feeds: packet payload is already text). The TRM does not know or care which path a `ProcessedPacket` took to arrive. It only depends on the schema being satisfied.
+
+Everything upstream of the `ProcessedPacket` boundary is out of scope for the TRM. Everything downstream of the TRM's JSON output is out of scope for the TRM. The contracts at those two boundaries are the only interface points.
+
+In the radio dispatch reference implementation specifically:
+
+```
+OP25 capture → TransmissionPacket → ASR → ProcessedTransmissionPacket → [TRM] → Event store → Web UI
+```
+
+See the Albatross spec and Phase 1A/1B documentation for the radio-specific types and pipeline details.

@@ -53,9 +53,9 @@ Nothing downstream depends on the domain-specific fields directly — only the T
 
 ### 3. Preprocessing
 
-Domain-specific enrichment. The raw Packet payload is transformed into something the TRM can route. In some domains this is heavy (radio: multi-pass ASR to convert audio into text). In others it may be trivial (a stream of text messages needs no preprocessing at all).
+Domain-specific enrichment. The raw Packet payload is transformed into a `ProcessedPacket` — the named type that the TRM ingests. In some domains this is heavy (radio: multi-pass ASR to convert audio into text). In others it may be trivial (a stream of text messages needs no preprocessing at all, and the Packet is promoted to a `ProcessedPacket` directly).
 
-Preprocessing output must conform to the TRM message contract:
+Every `ProcessedPacket` conforms to this schema:
 
 ```json
 {
@@ -66,29 +66,31 @@ Preprocessing output must conform to the TRM message contract:
 }
 ```
 
-The metadata here is populated from the Packet's metadata. This is the bridge between the domain-specific ingestion layer and the domain-agnostic intelligence layer.
+The `metadata` field is populated from the upstream Packet's metadata. This is the bridge between the domain-specific ingestion layer and the domain-agnostic intelligence layer.
+
+Domain-specific implementations may define a named `ProcessedPacket` subtype. The radio pipeline produces `ProcessedTransmissionPacket` — the `TransmissionPacket` after ASR has run. See the TRM spec for the `ProcessedPacket` schema definition and the radio pipeline spec for `ProcessedTransmissionPacket`.
 
 **The question this stage answers:** *How do we prepare a Packet for routing?*
 
 ### 4. TRM — Thread Routing Module
 
-The intelligence layer. The TRM is fully domain-agnostic. It receives a stream of preprocessed messages and simultaneously maintains two structures:
+The intelligence layer. The TRM is fully domain-agnostic. It receives a stream of `ProcessedPacket` objects and simultaneously maintains two structures:
 
 - **Threads** — communication patterns (who is talking to whom)
 - **Events** — real-world occurrences (what is being talked about)
 
-For every incoming message it makes two independent decisions:
+For every incoming `ProcessedPacket` it makes two independent decisions:
 
 | Layer | Decisions |
 |---|---|
 | Thread | `new` / `existing` / `unknown` |
 | Event | `new` / `existing` / `none` / `unknown` |
 
-The TRM knows nothing about radio, audio, or talkgroups. It knows about messages, metadata weights, conversational structure, and routing logic. Domain-specific behavior is injected through configuration — telling the TRM what the metadata fields mean and how much to trust them.
+The TRM knows nothing about radio, audio, or talkgroups. It knows about `ProcessedPacket` objects, metadata weights, conversational structure, and routing logic. Domain-specific behavior is injected through configuration — telling the TRM what the metadata fields mean and how much to trust them.
 
 Output is always structured JSON. Freeform reasoning may be retained as a debug artifact but is not part of the contract.
 
-**The question this stage answers:** *What is this message part of, and what is it about?*
+**The question this stage answers:** *What is this `ProcessedPacket` part of, and what is it about?*
 
 ### 5. Analysis
 
@@ -117,7 +119,7 @@ The only thing that makes stages interoperable is the contracts at their boundar
 | Boundary | Contract |
 |---|---|
 | Stream → Packets | Base `Packet` schema |
-| Preprocessing → TRM | TRM message contract (`id`, `timestamp`, `text`, `metadata`) |
+| Preprocessing → TRM | `ProcessedPacket` (`id`, `timestamp`, `text`, `metadata`) |
 | TRM → Analysis | Structured JSON routing output (`thread_id`, `event_id`, decisions, confidence) |
 
 Implementations can do anything they want inside a stage. They must honor these contracts at the boundaries.
@@ -132,8 +134,8 @@ The radio dispatch intelligence pipeline is the first and currently only Albatro
 |---|---|
 | Data Stream | OP25 trunked radio receiver |
 | Packets | `TransmissionPacket` (audio + radio metadata) |
-| Preprocessing | Multi-pass ASR (Whisper + alternatives) |
-| TRM | Thread routing + event correlation on transcribed transmissions |
+| Preprocessing | Multi-pass ASR (Whisper + alternatives) → `ProcessedTransmissionPacket` |
+| TRM | Thread routing + event correlation on `ProcessedTransmissionPacket` objects |
 | Analysis | Incident summaries, timeline UI, daily reports |
 
 See `specs/radio_pipeline_spec.md` for the full implementation spec.
@@ -146,7 +148,7 @@ To build a new Albatross implementation:
 
 1. Identify your data stream
 2. Define how it segments into Packets — what does a discrete unit look like in your domain?
-3. Define your Preprocessing step — what does a Packet need to become before the TRM can route it?
+3. Define your Preprocessing step — what does a Packet need to become a `ProcessedPacket`? For text-based domains this may be trivial. For audio or binary domains it may be substantial.
 4. Configure the TRM for your domain — what do your metadata fields mean? What are the threading and event signals?
 5. Define your Analysis layer — what do you want to do with threads and events once they exist?
 6. Build a golden dataset — Tier 1 scenarios are always plain-language, domain-agnostic. Tiers 2–4 are domain-specific.
