@@ -211,7 +211,7 @@ Example scenarios:
 ### `packets.json`
 
 Each entry is a `ReadyPacket` — a `ProcessedPacket` dequeued and ready for routing. In Tier 1 scenarios, metadata is minimal: just a speaker identifier. Tier 2+ scenarios populate metadata with domain-specific fields.
-
+  
 ```json
 [
   {

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "pkt_001",
+    "timestamp": "2024-01-15T08:00:00Z",
+    "text": "Good morning.",
+    "metadata": {
+      "speaker": "alice"
+    }
+  },
+  {
+    "id": "pkt_002",
+    "timestamp": "2024-01-15T08:00:10Z",
+    "text": "Morning. How are you?",
+    "metadata": {
+      "speaker": "bob"
+    }
+  },
+  {
+    "id": "pkt_003",
+    "timestamp": "2024-01-15T08:00:22Z",
+    "text": "Good, looks like a busy one. You?",
+    "metadata": {
+      "speaker": "alice"
+    }
+  },
+  {
+    "id": "pkt_004",
+    "timestamp": "2024-01-15T08:00:35Z",
+    "text": "Same. Hey, did you see the alert? One of the warehouses burned down overnight.",
+    "metadata": {
+      "speaker": "bob"
+    }
+  },
+  {
+    "id": "pkt_005",
+    "timestamp": "2024-01-15T08:00:47Z",
+    "text": "What? Which one?",
+    "metadata": {
+      "speaker": "alice"
+    }
+  },
+  {
+    "id": "pkt_006",
+    "timestamp": "2024-01-15T08:01:02Z",
+    "text": "The one on Meridian. Started around 3am, fire department is still on scene.",
+    "metadata": {
+      "speaker": "bob"
+    }
+  },
+  {
+    "id": "pkt_007",
+    "timestamp": "2024-01-15T08:01:18Z",
+    "text": "Okay, we need to get ahead of this. There's an unscheduled meeting at 10.",
+    "metadata": {
+      "speaker": "alice"
+    }
+  },
+  {
+    "id": "pkt_008",
+    "timestamp": "2024-01-15T08:01:30Z",
+    "text": "Yeah, I just got the calendar invite. I'll be there.",
+    "metadata": {
+      "speaker": "bob"
+    }
+  },
+  {
+    "id": "pkt_009",
+    "timestamp": "2024-01-15T08:01:40Z",
+    "text": "See you there.",
+    "metadata": {
+      "speaker": "alice"
+    }
+  }
+]
