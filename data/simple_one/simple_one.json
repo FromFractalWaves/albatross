@@ -1,0 +1,74 @@
+[
+  {
+    "id": "pkt_001",
+    "timestamp": "2024-01-15T09:00:00Z",
+    "text": "Dylan! How's it going man?",
+    "metadata": { "speaker": "bob" }
+  },
+  {
+    "id": "pkt_002",
+    "timestamp": "2024-01-15T09:00:07Z",
+    "text": "hey",
+    "metadata": { "speaker": "sam" }
+  },
+  {
+    "id": "pkt_003",
+    "timestamp": "2024-01-15T09:00:14Z",
+    "text": "Bob! Not bad, not bad. You?",
+    "metadata": { "speaker": "dylan" }
+  },
+  {
+    "id": "pkt_004",
+    "timestamp": "2024-01-15T09:00:19Z",
+    "text": "hey",
+    "metadata": { "speaker": "jose" }
+  },
+  {
+    "id": "pkt_005",
+    "timestamp": "2024-01-15T09:00:38Z",
+    "text": "Doing alright. Did you see the new timesheet policy they rolled out?",
+    "metadata": { "speaker": "bob" }
+  },
+  {
+    "id": "pkt_006",
+    "timestamp": "2024-01-15T09:00:51Z",
+    "text": "made a lemon pie last night, turned out really good",
+    "metadata": { "speaker": "sam" }
+  },
+  {
+    "id": "pkt_007",
+    "timestamp": "2024-01-15T09:01:04Z",
+    "text": "Oh I saw it. You have to log in fifteen minute increments now? Are they serious?",
+    "metadata": { "speaker": "dylan" }
+  },
+  {
+    "id": "pkt_008",
+    "timestamp": "2024-01-15T09:01:17Z",
+    "text": "oh nice, what kind of crust?",
+    "metadata": { "speaker": "jose" }
+  },
+  {
+    "id": "pkt_009",
+    "timestamp": "2024-01-15T09:01:33Z",
+    "text": "Dead serious. And Karen from HR has been going desk to desk checking that people are filling it out correctly. It's insane.",
+    "metadata": { "speaker": "bob" }
+  },
+  {
+    "id": "pkt_010",
+    "timestamp": "2024-01-15T09:01:44Z",
+    "text": "butter crust, did it from scratch. honestly thinking about doing a lemon blueberry pound cake next",
+    "metadata": { "speaker": "sam" }
+  },
+  {
+    "id": "pkt_011",
+    "timestamp": "2024-01-15T09:02:01Z",
+    "text": "Karen came by my desk twice yesterday. I just left the spreadsheet open and nodded at her.",
+    "metadata": { "speaker": "dylan" }
+  },
+  {
+    "id": "pkt_012",
+    "timestamp": "2024-01-15T09:02:19Z",
+    "text": "oh man do it, lemon blueberry pound cake goes so hard",
+    "metadata": { "speaker": "jose" }
+  }
+]
