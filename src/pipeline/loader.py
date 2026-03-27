@@ -2,8 +2,8 @@ import json
 import logging
 from pathlib import Path
 
-from src.models.packets import ReadyPacket
-from src.pipeline.queue import PacketQueue
+from models.packets import ReadyPacket
+from pipeline.queue import PacketQueue
 
 logger = logging.getLogger(__name__)
 

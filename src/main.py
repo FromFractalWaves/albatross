@@ -2,8 +2,8 @@ import asyncio
 import logging
 from pathlib import Path
 
-from src.pipeline.loader import PacketLoader
-from src.pipeline.queue import PacketQueue
+from pipeline.loader import PacketLoader
+from pipeline.queue import PacketQueue
 
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
