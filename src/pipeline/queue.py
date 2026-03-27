@@ -1,5 +1,5 @@
 import asyncio
-from models.packets import ReadyPacket
+from src.models.packets import ReadyPacket
 
 
 class PacketQueue:
