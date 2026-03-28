@@ -23,10 +23,13 @@
 
 ### Frontend (`web/`)
 
-- Next.js (TypeScript, App Router) project
+- Next.js (TypeScript, App Router) with Tailwind CSS v4, custom design tokens, JetBrains Mono font
 - TypeScript types mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`, plus WebSocket message types (`RunStartedMessage`, `PacketRoutedMessage`, `RunCompleteMessage`, `RunErrorMessage`)
 - `useRunSocket` hook — opens a WebSocket, parses messages via `useReducer`, tracks `context`, `routingRecords`, `latestPacketId`, `incomingPacket`, `status`, `error`, and `scenario`
-- Minimal page (`page.tsx`) — button starts a hardcoded run (scenario_02_interleaved, speed_factor 20.0), renders raw JSON context updating live
+- Utility libraries: `threadColors.ts` (rotating color palette), `packetDecisions.ts` (joins routing records to packets), `utils.ts` (cn helper)
+- Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `IncomingBanner`, `TopBar`, `ContextInspector`
+- Home page (`page.tsx`) — launches a run and redirects to `/run/{runId}`
+- Live run page (`run/[runId]/page.tsx`) — visual dashboard: thread lanes with color-coded packets, incoming packet banner with pulsing LLM indicator, decision badges, top bar with status/stats, collapsible context inspector. Tab bar with LIVE active (EVENTS/TIMELINE disabled — Phase 5)
 
 ### Tests (`tests/`)
 
@@ -63,16 +66,34 @@ thread-routing-module/
 │   ├── conftest.py           # Shared fixtures (async test client)
 │   ├── test_scenarios.py     # Scenario endpoint tests (8)
 │   └── test_runs.py          # Run + WebSocket tests (7)
+├── dev.sh                        # Launch API + frontend together
 ├── web/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── layout.tsx    # Root layout
-│   │   │   └── page.tsx      # Minimal page — raw JSON run view
+│   │   │   ├── globals.css       # Design tokens (Tailwind v4 @theme), base styles
+│   │   │   ├── layout.tsx        # Root layout, JetBrains Mono font
+│   │   │   ├── page.tsx          # Run launcher — redirects to /run/{runId}
+│   │   │   └── run/
+│   │   │       └── [runId]/
+│   │   │           └── page.tsx  # Live run dashboard
+│   │   ├── components/
+│   │   │   ├── Badge.tsx         # Reusable badge (default/solid/outline)
+│   │   │   ├── DecisionBadge.tsx # Routing decision badge (new/existing/none/buffer/unknown)
+│   │   │   ├── SectionHeader.tsx # Section header with optional count
+│   │   │   ├── PacketCard.tsx    # Packet row with speaker, text, decision badges
+│   │   │   ├── ThreadLane.tsx    # Thread column with color-coded packet list
+│   │   │   ├── IncomingBanner.tsx # Incoming packet banner with pulsing indicator
+│   │   │   ├── TopBar.tsx        # Sticky top bar with status and stats
+│   │   │   └── ContextInspector.tsx # Collapsible raw JSON inspector
 │   │   ├── hooks/
-│   │   │   └── useRunSocket.ts  # WebSocket hook with useReducer
+│   │   │   └── useRunSocket.ts   # WebSocket hook with useReducer
+│   │   ├── lib/
+│   │   │   ├── utils.ts          # cn() helper (clsx + tailwind-merge)
+│   │   │   ├── threadColors.ts   # Thread color palette mapping
+│   │   │   └── packetDecisions.ts # Routing record lookup by packet ID
 │   │   └── types/
-│   │       ├── trm.ts        # ReadyPacket, Thread, Event, RoutingRecord, TRMContext
-│   │       └── websocket.ts  # RunStarted, PacketRouted, RunComplete, RunError messages
+│   │       ├── trm.ts            # ReadyPacket, Thread, Event, RoutingRecord, TRMContext
+│   │       └── websocket.ts      # RunStarted, PacketRouted, RunComplete, RunError messages
 │   └── ...
 └── src/
     ├── main.py
@@ -118,8 +139,8 @@ thread-routing-module/
 
 ## What's Next
 
-1. Build the live run view UI — visual thread lanes, event cards, routing badges (webui-api Phase 4)
-2. Scenario browser + run controls (Phase 5)
-3. Review mode + expected vs actual comparison (Phase 6)
+1. Events + Timeline tabs — complete the dashboard's three-tab interface (webui-api Phase 5)
+2. Scenario browser + run controls (Phase 6)
+3. Review mode + expected vs actual comparison (Phase 7)
 4. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
 5. Run all four scenarios through the scorer and iterate on the system prompt until passing

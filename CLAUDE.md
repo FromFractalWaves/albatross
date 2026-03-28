@@ -29,6 +29,11 @@ python -m pytest tests/ -v
 cd web && npm run dev
 ```
 
+```bash
+# Launch both API + frontend together
+./dev.sh
+```
+
 The CLI entry point is `src/main.py`. The API entry point is `api/main.py` (FastAPI). Both require the venv activated and `.env` with `ANTHROPIC_API_KEY` for live runs. The frontend dev server runs on `localhost:3000` and talks to the API on `localhost:8000`.
 
 ## Architecture
@@ -56,12 +61,15 @@ FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `src/
 
 ### Frontend (`web/`)
 
-Next.js (TypeScript, App Router) frontend that connects to the API over WebSocket for live run observation.
+Next.js (TypeScript, App Router) frontend with a visual dashboard for watching the TRM route packets in real time. Uses Tailwind CSS v4 with custom design tokens, shadcn/ui `cn()` utility, and JetBrains Mono font.
 
 - **`web/src/types/trm.ts`** — TypeScript interfaces mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`.
 - **`web/src/types/websocket.ts`** — Discriminated union for WebSocket messages: `RunStarted`, `PacketRouted`, `RunComplete`, `RunError`.
 - **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, error, scenario }`.
-- **`web/src/app/page.tsx`** — Minimal page (Phase 3): starts a run via `POST /api/runs`, connects via WebSocket, renders raw TRM context JSON updating in real time. Will be replaced by the dashboard in Phase 4.
+- **`web/src/lib/`** — `utils.ts` (cn helper), `threadColors.ts` (rotating color palette for threads), `packetDecisions.ts` (joins routing records to packets by ID).
+- **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `IncomingBanner`, `TopBar`, `ContextInspector`.
+- **`web/src/app/page.tsx`** — Run launcher: starts a run via `POST /api/runs` and redirects to `/run/{runId}`.
+- **`web/src/app/run/[runId]/page.tsx`** — Live run dashboard: visual thread lanes, incoming packet banner, decision badges, top bar with stats, collapsible context inspector. Tab bar with LIVE active (EVENTS and TIMELINE tabs present but disabled — Phase 5).
 
 ### Tests (`tests/`)
 
@@ -88,6 +96,6 @@ Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interl
 - `docs/trm_spec.md` — TRM spec: packet types, routing decisions, golden dataset tiers, scoring metrics
 - `docs/runtime_loop.md` — per-packet execution loop, context schema, buffering, open problems
 - `docs/trm_outline.md` — current state and next steps
-- `docs/webui-api.md` — 7-phase plan for web UI and API (Phases 1–3 done, Phase 4 next)
+- `docs/webui-api.md` — 7-phase plan for web UI and API (Phases 1–4 done, Phase 5 next)
 - `docs/ui_spec.md` — visual design spec: design tokens, component specs, layout, interaction patterns
 - `docs/ui_mockup.jsx` — interactive React mockup with inline styles and mock data, component reference for Phase 4+

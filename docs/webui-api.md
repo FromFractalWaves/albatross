@@ -388,7 +388,7 @@ Page:
 | 1 | FastAPI skeleton + scenario endpoints | **Done** |
 | 2 | Runner service + WebSocket | **Done** |
 | 3 | Next.js scaffold + raw WebSocket view | **Done** |
-| 4 | Dashboard foundation + live view | Not started |
+| 4 | Dashboard foundation + live view | **Done** |
 | 5 | Events + timeline tabs | Not started |
 | 6 | Scenario browser + run controls | Not started |
 | 7 | Review mode + comparison overlay | Not started |
