@@ -21,10 +21,10 @@ async def consume(queue: PacketQueue) -> None:
 
 
 async def main() -> None:
-    packets_path = Path("data/tier_one/scenario_02_interleaved/packets.json")
+    packets_path = Path(__file__).parent.parent / "data/tier_one/scenario_02_interleaved/packets.json"
 
     queue = PacketQueue()
-    loader = PacketLoader(packets_path, queue)
+    loader = PacketLoader(packets_path, queue, speed_factor=20.0)
 
     await asyncio.gather(
         loader.load(),
