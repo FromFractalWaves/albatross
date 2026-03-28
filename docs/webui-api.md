@@ -269,6 +269,19 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 - `web/src/components/IncomingPacket.tsx` — highlighted display of the packet currently being routed
 - Layout: incoming packet at top, thread lanes side by side below, events panel to the side or below, context inspector collapsible at bottom
 
+**Pre-work (before building components):**
+
+1. **Add Tailwind CSS.** Phase 4 has 7 components needing real layout — side-by-side dynamic columns, collapsible panels, color coding. Tailwind is the fastest path. Install it before writing any components so styling assumptions are consistent across all of them.
+
+2. **Include `incoming_packet` in the WebSocket broadcast.** The backend currently strips `incoming_packet` from the context snapshot before sending (`runner.py`). But this phase needs an `IncomingPacket` component showing what's currently being routed. Small fix: stop stripping it, or send it as a top-level field alongside `context` in the `packet_routed` message. Update the TypeScript types to match.
+
+3. **Extend `useRunSocket` to track the latest routed packet.** The hook currently doesn't expose *which* packet just arrived. Add `latestPacketId: string | null` to the reducer state, set it on each `packet_routed` action. This makes the incoming-packet highlight trivial without diffing arrays.
+
+**Layout decisions:**
+
+- Thread lanes are dynamic — the count grows as the LLM creates threads. Use CSS Grid with `auto-fill` or flexbox wrapping so new lanes appear without layout code changes.
+- Build order should be bottom-up: `PacketCard` → `RoutingBadge` → `ThreadLane` → `EventCard` → `BufferZone` → `IncomingPacket` → `ContextInspector` → wire into the run page. Small pieces first, compose at the end.
+
 **What NOT to build:** No scenario browser page. No playback controls. No comparison overlay. No run history.
 
 **How to verify:**
