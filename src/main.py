@@ -4,19 +4,20 @@ from pathlib import Path
 
 from src.pipeline.loader import PacketLoader
 from src.pipeline.queue import PacketQueue
+from src.pipeline.router import TRMRouter
 
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
-async def consume(queue: PacketQueue) -> None:
+async def consume(queue: PacketQueue, router: TRMRouter) -> None:
     while True:
         packet = await queue.get()
         if packet is None:
             logger.info("Stream exhausted — consumer done")
             queue.task_done()
             break
-        logger.info(f"Router received: {packet.id} | speaker={packet.metadata.get('speaker')} | {packet.text[:60]}")
+        await router.route(packet)
         queue.task_done()
 
 
@@ -25,11 +26,16 @@ async def main() -> None:
 
     queue = PacketQueue()
     loader = PacketLoader(packets_path, queue, speed_factor=20.0)
+    router = TRMRouter(buffers=5)
 
     await asyncio.gather(
         loader.load(),
-        consume(queue),
+        consume(queue, router),
     )
+
+    logger.info("--- Routing complete ---")
+    for record in router.routing_records:
+        logger.info(record.model_dump_json())
 
 
 if __name__ == "__main__":
