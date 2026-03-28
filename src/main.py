@@ -5,6 +5,13 @@ from pathlib import Path
 from src.pipeline.loader import PacketLoader
 from src.pipeline.queue import PacketQueue
 from src.pipeline.router import TRMRouter
+from dotenv import load_dotenv
+import os
+
+load_dotenv()  # loads .env into environment
+
+import anthropic
+client = anthropic.Anthropic()  # auto-reads ANTHROPIC_API_KEY
 
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

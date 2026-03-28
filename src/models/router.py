@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel, Field
-from models.packets import ReadyPacket
+from src.models.packets import ReadyPacket
 
 
 class ThreadDecision(str, Enum):
