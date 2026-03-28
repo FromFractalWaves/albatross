@@ -339,7 +339,7 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | FastAPI skeleton + scenario endpoints | Not started |
+| 1 | FastAPI skeleton + scenario endpoints | **Done** |
 | 2 | Runner service + WebSocket | Not started |
 | 3 | Next.js scaffold + raw WebSocket view | Not started |
 | 4 | Live run view UI | Not started |
