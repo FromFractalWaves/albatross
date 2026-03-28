@@ -14,13 +14,21 @@ Read `docs/albatross.md` first for the big picture, then `docs/trm_spec.md` for 
 # Activate the venv
 source src/.venv/bin/activate
 
-# Run the pipeline (requires ANTHROPIC_API_KEY in .env)
+# Run the pipeline directly (requires ANTHROPIC_API_KEY in .env)
 python -m src.main
+
+# Run the API server
+uvicorn api.main:app --reload
+
+# Run tests (no API key needed — LLM calls are mocked)
+python -m pytest tests/ -v
 ```
 
-The entry point is `src/main.py`. It loads a scenario's `packets.json`, queues packets with timestamp-aware replay (default 20x speed), and routes them through the LLM-backed router.
+The CLI entry point is `src/main.py`. The API entry point is `api/main.py` (FastAPI). Both require the venv activated and `.env` with `ANTHROPIC_API_KEY` for live runs.
 
 ## Architecture
+
+### TRM Pipeline (`src/`)
 
 The pipeline has three stages wired together with asyncio:
 
@@ -32,6 +40,18 @@ The pipeline has three stages wired together with asyncio:
 
 - **`packets.py`**: `ProcessedPacket` (id, timestamp, text, metadata dict) and `ReadyPacket` (alias).
 - **`router.py`**: `ThreadDecision`/`EventDecision` enums, `Thread`, `Event`, `RoutingRecord`, `TRMContext`. All Pydantic models — context is serialized with `model_dump(mode="json")`.
+
+### API (`api/`)
+
+FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `src/` — it wraps the existing pipeline, it doesn't replace it.
+
+- **`api/routes/scenarios.py`** — `GET /api/scenarios` (list), `GET /api/scenarios/{tier}/{scenario}` (detail). Reads directly from the `data/` directory.
+- **`api/routes/runs.py`** — `POST /api/runs` (start a run), `ws://localhost:8000/ws/runs/{run_id}` (live stream).
+- **`api/services/runner.py`** — `RunManager` orchestrates runs as background asyncio tasks, broadcasts `run_started`, `packet_routed`, `run_complete` messages over WebSocket. Runs are in-memory (no persistence yet).
+
+### Tests (`tests/`)
+
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. Tests cover scenario endpoints (10 tests) and run/WebSocket flow (7 tests).
 
 ### Key design decisions
 
@@ -46,7 +66,7 @@ Scenarios live under `data/tier_one/`, `data/tier_two/`, etc. Each scenario fold
 - `expected_output.json` — golden truth (threads, events, routing records)
 - `README.md` — scenario description
 
-Currently only `data/tier_one/scenario_02_interleaved/` exists.
+Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interleaved`, `scenario_03_event_opens_mid_thread`, `scenario_04_three_way_split`.
 
 ## Docs
 

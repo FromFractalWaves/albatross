@@ -8,7 +8,10 @@
 
 - Async packet pipeline — `PacketLoader` reads `packets.json` and pushes `ReadyPacket` objects into an `asyncio.Queue` with timestamp-based replay and configurable `speed_factor`
 - `TRMRouter` — LLM-backed router that processes one `ReadyPacket` at a time, maintains full session context, and emits a `RoutingRecord` per packet
-- One Tier 1 scenario — `scenario_02_interleaved` — built and running
+- Four Tier 1 scenarios — `scenario_01` through `scenario_04` — built
+- FastAPI backend (`api/`) with scenario listing/detail endpoints and run management
+- Runner service — wraps the TRM pipeline, streams `run_started`, `packet_routed`, `run_complete` messages over WebSocket
+- Test suite (`tests/`) — 16 tests covering scenario endpoints and run/WebSocket flow (mocked LLM)
 
 ---
 
@@ -16,18 +19,30 @@
 
 ```
 thread-routing-module/
+├── api/
+│   ├── main.py               # FastAPI app, CORS, RunManager setup
+│   ├── routes/
+│   │   ├── scenarios.py      # GET /api/scenarios, GET /api/scenarios/{tier}/{scenario}
+│   │   └── runs.py           # POST /api/runs, WebSocket /ws/runs/{run_id}
+│   └── services/
+│       └── runner.py         # RunManager — wraps TRM pipeline, manages run state
 ├── data/
 │   └── tier_one/
-│       └── scenario_02_interleaved/
-│           ├── packets.json
-│           ├── expected_output.json
-│           └── README.md
+│       ├── scenario_01_simple_two_party/
+│       ├── scenario_02_interleaved/
+│       ├── scenario_03_event_opens_mid_thread/
+│       └── scenario_04_three_way_split/
 ├── docs/
 │   ├── albatross.md
 │   ├── trm_spec.md
 │   ├── runtime_loop.md
+│   ├── webui-api.md
 │   └── planning/
 │       └── trm_outline.md
+├── tests/
+│   ├── conftest.py           # Shared fixtures (async test client)
+│   ├── test_scenarios.py     # Phase 1 endpoint tests
+│   └── test_runs.py          # Phase 2 endpoint + WebSocket tests (mocked LLM)
 └── src/
     ├── main.py
     ├── models/
@@ -59,15 +74,17 @@ thread-routing-module/
 
 | Scenario | Status |
 |----------|--------|
-| `scenario_01_simple_two_party` | Not yet written |
+| `scenario_01_simple_two_party` | Written |
 | `scenario_02_interleaved` | Written, router running against it |
-| `scenario_03_event_opens_mid_thread` | Not yet written |
+| `scenario_03_event_opens_mid_thread` | Written |
+| `scenario_04_three_way_split` | Written |
 
 ---
 
 ## What's Next
 
-1. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
-2. Build the UI — replace raw terminal output with something readable
-3. Write `scenario_01` and `scenario_03`
-4. Run all three scenarios through the scorer and iterate on the system prompt until passing
+1. Build the frontend — Next.js scaffold, WebSocket connection, live run view (webui-api Phases 3–4)
+2. Scenario browser + run controls (Phase 5)
+3. Review mode + expected vs actual comparison (Phase 6)
+4. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
+5. Run all four scenarios through the scorer and iterate on the system prompt until passing
