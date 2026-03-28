@@ -87,6 +87,7 @@ For every `ReadyPacket` the router receives, the TRM produces decisions at both 
 |----------|---------|
 | `existing` | Belongs to an already-open thread (includes thread ID) |
 | `new` | Opens a new thread |
+| `buffer` | Hold this packet in `packets_to_resolve` — costs one buffer |
 | `unknown` | Cannot be confidently classified |
 
 **Event layer:**
@@ -184,22 +185,31 @@ Example scenarios:
 ## Dataset Directory Structure
 
 ```
-/datasets/
-  README.md                              # How to use the dataset, how to add scenarios
-  /tier1_plain_conversation/
+/data/
+  /tier_one/
     /scenario_01_simple_two_party/
       packets.json                       # Input ReadyPackets
       expected_output.json               # Ground truth threads, events, and decisions
       README.md                          # Human description of what's happening
-    /scenario_02_three_way_split/
-      ...
-  /tier2_radio_domain/
+    /scenario_02_interleaved/
+      packets.json
+      expected_output.json
+      README.md
+    /scenario_03_event_opens_mid_thread/
+      packets.json
+      expected_output.json
+      README.md
+    /scenario_04_three_way_split/
+      packets.json
+      expected_output.json
+      README.md
+  /tier_two/
     /scenario_01_traffic_stop/
       ...
-  /tier3_metadata_dominant/
+  /tier_three/
     /scenario_01_tgid_separation/
       ...
-  /tier4_adversarial/
+  /tier_four/
     /scenario_01_mutual_aid_cross_tgid/
       ...
 ```
