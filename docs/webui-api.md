@@ -273,9 +273,9 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 
 1. **Add Tailwind CSS.** Phase 4 has 7 components needing real layout — side-by-side dynamic columns, collapsible panels, color coding. Tailwind is the fastest path. Install it before writing any components so styling assumptions are consistent across all of them.
 
-2. **Include `incoming_packet` in the WebSocket broadcast.** The backend currently strips `incoming_packet` from the context snapshot before sending (`runner.py`). But this phase needs an `IncomingPacket` component showing what's currently being routed. Small fix: stop stripping it, or send it as a top-level field alongside `context` in the `packet_routed` message. Update the TypeScript types to match.
+2. ~~**Include `incoming_packet` in the WebSocket broadcast.**~~ **Done.** The runner pops `incoming_packet` from the context snapshot and sends it as a top-level sibling field in the `packet_routed` message. The TypeScript `PacketRoutedMessage` type and `useRunSocket` hook already handle this.
 
-3. **Extend `useRunSocket` to track the latest routed packet.** The hook currently doesn't expose *which* packet just arrived. Add `latestPacketId: string | null` to the reducer state, set it on each `packet_routed` action. This makes the incoming-packet highlight trivial without diffing arrays.
+3. ~~**Extend `useRunSocket` to track the latest routed packet.**~~ **Done.** The hook's reducer state includes `latestPacketId: string | null` and `incomingPacket: ReadyPacket | null`, both set on each `packet_routed` action and cleared on `run_complete`.
 
 **Layout decisions:**
 
