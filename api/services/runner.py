@@ -79,14 +79,14 @@ class RunManager:
                 total += 1
 
                 context_snapshot = router.context.model_dump(mode="json")
-                # Remove incoming_packet from snapshot — it's stale after routing
-                context_snapshot.pop("incoming_packet", None)
+                incoming = context_snapshot.pop("incoming_packet", None)
 
                 await self._broadcast(run, {
                     "type": "packet_routed",
                     "packet_id": record.packet_id,
                     "routing_record": record.model_dump(mode="json"),
                     "context": context_snapshot,
+                    "incoming_packet": incoming,
                 })
 
             await load_task

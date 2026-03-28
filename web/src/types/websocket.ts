@@ -1,4 +1,4 @@
-import type { RoutingRecord, TRMContext } from "./trm";
+import type { ReadyPacket, RoutingRecord, TRMContext } from "./trm";
 
 export interface RunStartedMessage {
   type: "run_started";
@@ -11,6 +11,7 @@ export interface PacketRoutedMessage {
   packet_id: string;
   routing_record: RoutingRecord;
   context: TRMContext;
+  incoming_packet: ReadyPacket | null;
 }
 
 export interface RunCompleteMessage {

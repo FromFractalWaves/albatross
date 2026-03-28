@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TRM — Thread Routing Module",
@@ -12,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: "monospace", padding: "2rem" }}>{children}</body>
+      <body className="font-mono p-8">{children}</body>
     </html>
   );
 }

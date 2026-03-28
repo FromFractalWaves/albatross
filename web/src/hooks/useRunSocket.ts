@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer } from "react";
-import type { RoutingRecord, TRMContext } from "@/types/trm";
+import type { ReadyPacket, RoutingRecord, TRMContext } from "@/types/trm";
 import type { WSMessage } from "@/types/websocket";
 
 const WS_BASE = "ws://localhost:8000";
@@ -12,6 +12,8 @@ interface RunState {
   status: RunStatus;
   context: TRMContext | null;
   routingRecords: RoutingRecord[];
+  latestPacketId: string | null;
+  incomingPacket: ReadyPacket | null;
   error: string | null;
   scenario: { tier: string; name: string } | null;
 }
@@ -19,7 +21,7 @@ interface RunState {
 type Action =
   | { type: "connect" }
   | { type: "run_started"; scenario: { tier: string; name: string } }
-  | { type: "packet_routed"; record: RoutingRecord; context: TRMContext }
+  | { type: "packet_routed"; record: RoutingRecord; context: TRMContext; incomingPacket: ReadyPacket | null }
   | { type: "run_complete"; records: RoutingRecord[] }
   | { type: "run_error"; error: string }
   | { type: "ws_error" };
@@ -28,6 +30,8 @@ const initialState: RunState = {
   status: "idle",
   context: null,
   routingRecords: [],
+  latestPacketId: null,
+  incomingPacket: null,
   error: null,
   scenario: null,
 };
@@ -43,9 +47,17 @@ function reducer(state: RunState, action: Action): RunState {
         ...state,
         context: action.context,
         routingRecords: [...state.routingRecords, action.record],
+        latestPacketId: action.record.packet_id,
+        incomingPacket: action.incomingPacket,
       };
     case "run_complete":
-      return { ...state, status: "complete", routingRecords: action.records };
+      return {
+        ...state,
+        status: "complete",
+        routingRecords: action.records,
+        latestPacketId: null,
+        incomingPacket: null,
+      };
     case "run_error":
       return { ...state, status: "error", error: action.error };
     case "ws_error":
@@ -75,6 +87,7 @@ export function useRunSocket(runId: string | null) {
             type: "packet_routed",
             record: msg.routing_record,
             context: msg.context,
+            incomingPacket: msg.incoming_packet,
           });
           break;
         case "run_complete":
