@@ -254,53 +254,86 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 
 ---
 
-### Phase 4 — Live Run View UI
+### Phase 4 — Dashboard Foundation + Live View
 
-**Goal:** Replace the raw JSON dump with a real visual interface for watching the TRM work.
+**Goal:** Replace the raw JSON dump with a real visual dashboard for watching the TRM work. This is the core deliverable — after this phase, you can watch a run build threads visually in real time.
+
+**Design reference:** `docs/ui_spec.md` is the canonical design spec. `docs/ui_mockup.jsx` is the interactive mockup — use it as a component reference but follow the spec for final styling decisions.
+
+**Setup (before building components):**
+
+1. **Install shadcn/ui + Tailwind CSS.** `npx shadcn@latest init` pulls in Tailwind as a dependency. Configure the Tailwind theme with the design tokens from `docs/ui_spec.md` (backgrounds, text, accents) as CSS variables.
+2. **Load JetBrains Mono** (weights 400, 500, 600, 700) via Google Fonts or self-hosted.
+3. ~~**Include `incoming_packet` in the WebSocket broadcast.**~~ **Done.** The runner pops `incoming_packet` from the context snapshot and sends it as a top-level sibling field in the `packet_routed` message. The TypeScript `PacketRoutedMessage` type and `useRunSocket` hook already handle this.
+4. ~~**Extend `useRunSocket` to track the latest routed packet.**~~ **Done.** The hook's reducer state includes `latestPacketId: string | null` and `incomingPacket: ReadyPacket | null`, both set on each `packet_routed` action and cleared on `run_complete`.
 
 **What to build:**
-- `web/src/app/run/[runId]/page.tsx` — the live run view page
-- `web/src/components/ThreadLane.tsx` — vertical column per thread, packets stacking in arrival order, color-coded, thread label at top
-- `web/src/components/EventCard.tsx` — event label, status, connected thread indicators
-- `web/src/components/PacketCard.tsx` — individual packet display: text, speaker, timestamp, routing decision badge
-- `web/src/components/RoutingBadge.tsx` — compact indicator showing thread decision + event decision
-- `web/src/components/ContextInspector.tsx` — collapsible panel with raw JSON for debugging
-- `web/src/components/BufferZone.tsx` — holding area for buffered packets, buffers remaining counter
-- `web/src/components/IncomingPacket.tsx` — highlighted display of the packet currently being routed
-- Layout: incoming packet at top, thread lanes side by side below, events panel to the side or below, context inspector collapsible at bottom
 
-**Pre-work (before building components):**
+Base components (bottom-up):
+- `web/src/components/Badge.tsx` — reusable badge with `default`, `solid`, and `outline` variants, color-tinted backgrounds
+- `web/src/components/DecisionBadge.tsx` — `[icon] type:decision` format, color-coded per decision type (see ui_spec)
+- `web/src/components/SectionHeader.tsx` — 11px monospace uppercase header with optional count badge
 
-1. **Add Tailwind CSS.** Phase 4 has 7 components needing real layout — side-by-side dynamic columns, collapsible panels, color coding. Tailwind is the fastest path. Install it before writing any components so styling assumptions are consistent across all of them.
+Dashboard components:
+- `web/src/components/TopBar.tsx` — fixed top bar: TRM wordmark, scenario name, status badge, packet/buffer/speed counters
+- `web/src/components/IncomingBanner.tsx` — purple/cyan gradient banner showing the packet currently being routed, pulsing "awaiting LLM" indicator
+- `web/src/components/PacketCard.tsx` — packet row: ID, speaker, timestamp, text, decision badges. Latest packet gets left border highlight + background tint
+- `web/src/components/ThreadLane.tsx` — vertical column per thread: colored dot + header, packet list using `PacketCard`. Flex layout, min-width 340px, wraps on narrow screens
+- `web/src/components/ContextInspector.tsx` — collapsible panel: header row with chevron toggle, expandable `<pre>` block with raw TRMContext JSON
 
-2. ~~**Include `incoming_packet` in the WebSocket broadcast.**~~ **Done.** The runner pops `incoming_packet` from the context snapshot and sends it as a top-level sibling field in the `packet_routed` message. The TypeScript `PacketRoutedMessage` type and `useRunSocket` hook already handle this.
+Page:
+- `web/src/app/run/[runId]/page.tsx` — the live run view. Wires `useRunSocket` to all components above. Tab bar present with LIVE tab active (EVENTS and TIMELINE tabs visible but disabled/placeholder — built in Phase 5)
 
-3. ~~**Extend `useRunSocket` to track the latest routed packet.**~~ **Done.** The hook's reducer state includes `latestPacketId: string | null` and `incomingPacket: ReadyPacket | null`, both set on each `packet_routed` action and cleared on `run_complete`.
+**Build order:** Badge → DecisionBadge → SectionHeader → PacketCard → ThreadLane → IncomingBanner → TopBar → ContextInspector → run page (wire everything)
 
-**Layout decisions:**
+**Thread color assignment:** Threads get colors from a rotating palette as they're created: blue, amber, green, purple, cyan, red (cycling if more needed). Color assignment should be deterministic from thread creation order.
 
-- Thread lanes are dynamic — the count grows as the LLM creates threads. Use CSS Grid with `auto-fill` or flexbox wrapping so new lanes appear without layout code changes.
-- Build order should be bottom-up: `PacketCard` → `RoutingBadge` → `ThreadLane` → `EventCard` → `BufferZone` → `IncomingPacket` → `ContextInspector` → wire into the run page. Small pieces first, compose at the end.
-
-**What NOT to build:** No scenario browser page. No playback controls. No comparison overlay. No run history.
+**What NOT to build:** No Events tab content. No Timeline tab content. No BufferZone (deferred until a scenario exercises it). No scenario browser. No playback controls. No comparison overlay.
 
 **How to verify:**
-- Start a run, watch threads build up visually
-- Thread A (Bob/Dylan/timesheets) and Thread B (Sam/Jose/desserts) are visually distinct
+- Start a run against scenario_02_interleaved, watch threads build up visually
+- Thread A (Bob/Dylan/timesheets) in blue and Thread B (Sam/Jose/desserts) in amber are visually distinct
 - Packets appear in the correct thread lanes as they're routed
-- Events appear when they open (pkt_005 and pkt_006)
-- Routing badges show correct decisions
-- Context inspector shows the raw state and matches what the visual components display
+- Incoming banner shows each packet before it's routed, with pulsing indicator
+- Top bar shows running status, packet counter incrementing, buffer count, speed
+- Decision badges show correct decisions (new/existing/none)
+- Context inspector expands to show raw state matching the visual components
+- Run completes cleanly — status changes, incoming banner hides
 
 **Depends on:** Phase 3 (frontend connected to backend, WebSocket hook working).
 
-**Produces:** A usable visual tool for understanding TRM behavior. This is the core deliverable.
+**Produces:** A working visual dashboard for watching the TRM in real time. The LIVE tab is fully functional.
 
 ---
 
-### Phase 5 — Scenario Browser + Run Controls
+### Phase 5 — Events + Timeline Tabs
 
-**Goal:** Add the scenario management UI and run configuration.
+**Goal:** Complete the dashboard's three-tab interface. Add the Events and Timeline views, plus the BufferZone for scenarios that use buffering.
+
+**What to build:**
+- `web/src/components/EventCard.tsx` — event label, status badge, colored dot, thread link badges. Cards stacked vertically, max-width 600px
+- Timeline view (inline in the run page or a dedicated component) — flat chronological list of all packets across all threads, sorted by packet ID. Each row: packet ID, thread color dot, speaker, truncated text, decision badges
+- Wire the tab bar: LIVE, EVENTS, TIMELINE switch the main content area. State preserved across tab switches (scroll position, inspector collapse state)
+- `web/src/components/BufferZone.tsx` — conditional section between incoming banner and tab bar, visible when `packets_to_resolve` is non-empty. Amber-styled packet cards, buffer count badge
+
+**What NOT to build:** No scenario browser. No playback controls. No comparison overlay. No run history.
+
+**How to verify:**
+- EVENTS tab shows event cards with correct labels, status, and thread links
+- Events appear at the right time (event_A opens at pkt_005, event_B at pkt_006)
+- TIMELINE tab shows all packets in chronological order with correct thread colors
+- Switching tabs preserves state — going to Timeline and back to Live doesn't lose scroll position
+- BufferZone appears if a scenario uses buffering (may need a test scenario or manual verification)
+
+**Depends on:** Phase 4 (dashboard foundation, base components, run page).
+
+**Produces:** The complete dashboard from the mockup — all three tabs functional, full visual representation of TRM state.
+
+---
+
+### Phase 6 — Scenario Browser + Run Controls
+
+**Goal:** Add the scenario management UI and run configuration so runs can be launched from the browser instead of hardcoded.
 
 **What to build:**
 - `web/src/app/scenarios/page.tsx` — list all scenarios grouped by tier, fetched from `GET /api/scenarios`
@@ -317,13 +350,13 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 - Clicking "Run" with a chosen speed factor launches the run and navigates to the live view
 - Adding a new scenario folder to `data/` shows up in the browser
 
-**Depends on:** Phase 4 (live run view exists to navigate to).
+**Depends on:** Phase 5 (full dashboard exists to navigate to).
 
 **Produces:** Complete workflow: browse scenarios → pick one → configure → run → watch live.
 
 ---
 
-### Phase 6 — Review Mode + Expected vs Actual Comparison
+### Phase 7 — Review Mode + Expected vs Actual Comparison
 
 **Goal:** After a run completes, allow stepping through the results and comparing against expected output.
 
@@ -331,7 +364,7 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 - Playback controls on the run view: step forward, step back, jump to specific packet, auto-play at adjustable speed
 - Run state snapshots — store the context state after each packet so stepping backward is possible without re-running
 - Comparison overlay: when the run source was a scenario, show expected vs actual for each routing decision
-- Routing decision badges go green (match) or red (mismatch)
+- Decision badges get a green or red background override to indicate match/mismatch (see ui_spec Phase 6 addition)
 - Summary panel: total correct/incorrect thread decisions, event decisions, any cross-contamination
 
 **What NOT to build:** No scorer (formal metric computation). No multi-run comparison. No persistence.
@@ -342,7 +375,7 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 - See green badges on all 12 packets (assuming the TRM routed correctly)
 - Intentionally break something (e.g. a prompt change that causes a misroute) and see red badges appear
 
-**Depends on:** Phase 5 (scenario context available to the run view for comparison).
+**Depends on:** Phase 6 (scenario context available to the run view for comparison).
 
 **Produces:** A complete scenario development tool: run, observe, compare, iterate on the prompt.
 
@@ -355,6 +388,7 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 | 1 | FastAPI skeleton + scenario endpoints | **Done** |
 | 2 | Runner service + WebSocket | **Done** |
 | 3 | Next.js scaffold + raw WebSocket view | **Done** |
-| 4 | Live run view UI | Not started |
-| 5 | Scenario browser + run controls | Not started |
-| 6 | Review mode + comparison overlay | Not started |
+| 4 | Dashboard foundation + live view | Not started |
+| 5 | Events + timeline tabs | Not started |
+| 6 | Scenario browser + run controls | Not started |
+| 7 | Review mode + comparison overlay | Not started |

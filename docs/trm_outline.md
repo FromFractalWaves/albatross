@@ -30,8 +30,8 @@
 
 ### Tests (`tests/`)
 
-- 15 tests total, all mocked (no API key needed)
-- Scenario endpoint tests (8): list, sort order, detail content, 404 handling
+- 16 tests total, all mocked (no API key needed)
+- Scenario endpoint tests (9): list, sort order, detail content, structure, 404 handling
 - Run/WebSocket tests (7): run creation, validation, full WebSocket integration (verifies message ordering, backlog delivery, end-to-end flow with mocked LLM)
 
 ---

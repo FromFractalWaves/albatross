@@ -52,7 +52,7 @@ FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `src/
 
 - **`api/routes/scenarios.py`** — `GET /api/scenarios` (list), `GET /api/scenarios/{tier}/{scenario}` (detail). Reads directly from the `data/` directory.
 - **`api/routes/runs.py`** — `POST /api/runs` (start a run), `ws://localhost:8000/ws/runs/{run_id}` (live stream).
-- **`api/services/runner.py`** — `RunManager` orchestrates runs as background asyncio tasks, broadcasts `run_started`, `packet_routed`, `run_complete` messages over WebSocket. Runs are in-memory (no persistence yet).
+- **`api/services/runner.py`** — `RunManager` orchestrates runs as background asyncio tasks, broadcasts `run_started`, `packet_routed`, `run_complete` messages over WebSocket. Runs are in-memory (no persistence yet). The `packet_routed` message includes `context` (with `incoming_packet` popped out) and `incoming_packet` as a sibling field. Clients connecting mid-run receive the full message backlog.
 
 ### Frontend (`web/`)
 
@@ -60,12 +60,12 @@ Next.js (TypeScript, App Router) frontend that connects to the API over WebSocke
 
 - **`web/src/types/trm.ts`** — TypeScript interfaces mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`.
 - **`web/src/types/websocket.ts`** — Discriminated union for WebSocket messages: `RunStarted`, `PacketRouted`, `RunComplete`, `RunError`.
-- **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, error, scenario }`.
-- **`web/src/app/page.tsx`** — Minimal page: starts a run via `POST /api/runs`, connects via WebSocket, renders raw TRM context JSON updating in real time.
+- **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, error, scenario }`.
+- **`web/src/app/page.tsx`** — Minimal page (Phase 3): starts a run via `POST /api/runs`, connects via WebSocket, renders raw TRM context JSON updating in real time. Will be replaced by the dashboard in Phase 4.
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. Tests cover scenario endpoints (10 tests) and run/WebSocket flow (7 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 16 tests total: scenario endpoints (9 tests) and run/WebSocket flow (7 tests).
 
 ### Key design decisions
 
@@ -88,4 +88,6 @@ Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interl
 - `docs/trm_spec.md` — TRM spec: packet types, routing decisions, golden dataset tiers, scoring metrics
 - `docs/runtime_loop.md` — per-packet execution loop, context schema, buffering, open problems
 - `docs/trm_outline.md` — current state and next steps
-- `docs/webui-api.md` — 6-phase plan for web UI and API
+- `docs/webui-api.md` — 7-phase plan for web UI and API (Phases 1–3 done, Phase 4 next)
+- `docs/ui_spec.md` — visual design spec: design tokens, component specs, layout, interaction patterns
+- `docs/ui_mockup.jsx` — interactive React mockup with inline styles and mock data, component reference for Phase 4+

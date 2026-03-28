@@ -275,4 +275,4 @@ Click the header row to expand/collapse. State persists across tab switches. Whe
 
 ## File Reference
 
-The interactive mockup is at `docs/planning/trm_dashboard_mockup.jsx`. It uses inline styles and mock data for portability. The real implementation should use Tailwind classes and shadcn/ui components, with the design tokens mapped to Tailwind's config / CSS variables.
+The interactive mockup is at `docs/ui_mockup.jsx`. It uses inline styles and mock data for portability. The real implementation should use Tailwind classes and shadcn/ui components, with the design tokens mapped to Tailwind's config / CSS variables.
