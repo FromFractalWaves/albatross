@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pkt_001",
+    "timestamp": "2024-01-15T12:00:00Z",
+    "text": "Hey Priya, how was your weekend?",
+    "metadata": { "speaker": "tom" }
+  },
+  {
+    "id": "pkt_002",
+    "timestamp": "2024-01-15T12:00:11Z",
+    "text": "Pretty chill, just stayed in mostly. You?",
+    "metadata": { "speaker": "priya" }
+  },
+  {
+    "id": "pkt_003",
+    "timestamp": "2024-01-15T12:00:24Z",
+    "text": "Same. Watched a bunch of movies, nothing exciting.",
+    "metadata": { "speaker": "tom" }
+  },
+  {
+    "id": "pkt_004",
+    "timestamp": "2024-01-15T12:00:39Z",
+    "text": "Nice. Hey did you hear about the water main break on Elm Street?",
+    "metadata": { "speaker": "priya" }
+  },
+  {
+    "id": "pkt_005",
+    "timestamp": "2024-01-15T12:00:53Z",
+    "text": "No, when did that happen?",
+    "metadata": { "speaker": "tom" }
+  },
+  {
+    "id": "pkt_006",
+    "timestamp": "2024-01-15T12:01:07Z",
+    "text": "Saturday morning. The whole block was flooded. They had to shut off water to like four buildings.",
+    "metadata": { "speaker": "priya" }
+  },
+  {
+    "id": "pkt_007",
+    "timestamp": "2024-01-15T12:01:22Z",
+    "text": "That's wild. Is it fixed now?",
+    "metadata": { "speaker": "tom" }
+  },
+  {
+    "id": "pkt_008",
+    "timestamp": "2024-01-15T12:01:35Z",
+    "text": "Not yet. The city sent a crew out but apparently the pipe is old and they might have to replace the whole section.",
+    "metadata": { "speaker": "priya" }
+  },
+  {
+    "id": "pkt_009",
+    "timestamp": "2024-01-15T12:01:50Z",
+    "text": "My cousin lives on that block. I should check if she's affected.",
+    "metadata": { "speaker": "tom" }
+  },
+  {
+    "id": "pkt_010",
+    "timestamp": "2024-01-15T12:02:05Z",
+    "text": "Definitely. The buildings closer to the intersection got hit the worst.",
+    "metadata": { "speaker": "priya" }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pkt_001",
+    "timestamp": "2024-01-15T10:00:00Z",
+    "text": "Hey Marcus, did you see the build is broken?",
+    "metadata": { "speaker": "li" }
+  },
+  {
+    "id": "pkt_002",
+    "timestamp": "2024-01-15T10:00:12Z",
+    "text": "Yeah I saw it this morning. Looks like something in the auth module.",
+    "metadata": { "speaker": "marcus" }
+  },
+  {
+    "id": "pkt_003",
+    "timestamp": "2024-01-15T10:00:28Z",
+    "text": "I checked the logs, it's the token refresh endpoint. Started failing after last night's deploy.",
+    "metadata": { "speaker": "li" }
+  },
+  {
+    "id": "pkt_004",
+    "timestamp": "2024-01-15T10:00:41Z",
+    "text": "That tracks. Nina pushed a change to the token expiry logic around 11pm. I bet that's it.",
+    "metadata": { "speaker": "marcus" }
+  },
+  {
+    "id": "pkt_005",
+    "timestamp": "2024-01-15T10:00:55Z",
+    "text": "I'll roll it back and see if the build goes green. Can you ping Nina so she knows?",
+    "metadata": { "speaker": "li" }
+  },
+  {
+    "id": "pkt_006",
+    "timestamp": "2024-01-15T10:01:08Z",
+    "text": "Already messaged her. She's looking at it from her side too.",
+    "metadata": { "speaker": "marcus" }
+  },
+  {
+    "id": "pkt_007",
+    "timestamp": "2024-01-15T10:01:25Z",
+    "text": "Cool. By the way, are you going to the team lunch on Friday?",
+    "metadata": { "speaker": "li" }
+  },
+  {
+    "id": "pkt_008",
+    "timestamp": "2024-01-15T10:01:38Z",
+    "text": "Probably, depends if we get this sorted by then. Where are they going?",
+    "metadata": { "speaker": "marcus" }
+  },
+  {
+    "id": "pkt_009",
+    "timestamp": "2024-01-15T10:01:52Z",
+    "text": "That Korean place on 5th. Should be good.",
+    "metadata": { "speaker": "li" }
+  },
+  {
+    "id": "pkt_010",
+    "timestamp": "2024-01-15T10:02:04Z",
+    "text": "Oh nice, I'm in. Let me know if the rollback fixes things.",
+    "metadata": { "speaker": "marcus" }
+  }
+]

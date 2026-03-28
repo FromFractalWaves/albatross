@@ -1,0 +1,116 @@
+{
+  "threads": [
+    {
+      "thread_id": "thread_A",
+      "label": "Vince, Rachel, and Deon planning the Thursday client demo",
+      "status": "open",
+      "packet_ids": ["pkt_001", "pkt_002", "pkt_003", "pkt_004", "pkt_005", "pkt_007", "pkt_008", "pkt_010", "pkt_012"]
+    },
+    {
+      "thread_id": "thread_B",
+      "label": "Deon troubleshooting staging server 502 errors",
+      "status": "open",
+      "packet_ids": ["pkt_006", "pkt_009", "pkt_011"]
+    }
+  ],
+  "events": [
+    {
+      "event_id": "event_A",
+      "label": "Thursday client demo preparation",
+      "status": "open",
+      "thread_ids": ["thread_A"]
+    },
+    {
+      "event_id": "event_B",
+      "label": "Staging server down due to full disk",
+      "status": "open",
+      "thread_ids": ["thread_B"]
+    }
+  ],
+  "routing": [
+    {
+      "packet_id": "pkt_001",
+      "thread_decision": "new",
+      "thread_id": "thread_A",
+      "event_decision": "new",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_002",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_003",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_004",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_005",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_006",
+      "thread_decision": "new",
+      "thread_id": "thread_B",
+      "event_decision": "new",
+      "event_id": "event_B"
+    },
+    {
+      "packet_id": "pkt_007",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_008",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_009",
+      "thread_decision": "existing",
+      "thread_id": "thread_B",
+      "event_decision": "existing",
+      "event_id": "event_B"
+    },
+    {
+      "packet_id": "pkt_010",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    },
+    {
+      "packet_id": "pkt_011",
+      "thread_decision": "existing",
+      "thread_id": "thread_B",
+      "event_decision": "existing",
+      "event_id": "event_B"
+    },
+    {
+      "packet_id": "pkt_012",
+      "thread_decision": "existing",
+      "thread_id": "thread_A",
+      "event_decision": "existing",
+      "event_id": "event_A"
+    }
+  ]
+}

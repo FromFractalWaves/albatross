@@ -1,0 +1,74 @@
+[
+  {
+    "id": "pkt_001",
+    "timestamp": "2024-01-15T15:00:00Z",
+    "text": "Alright team, we need to figure out the demo for Thursday's client meeting.",
+    "metadata": { "speaker": "vince" }
+  },
+  {
+    "id": "pkt_002",
+    "timestamp": "2024-01-15T15:00:14Z",
+    "text": "I think we should lead with the dashboard. The new charts look solid.",
+    "metadata": { "speaker": "rachel" }
+  },
+  {
+    "id": "pkt_003",
+    "timestamp": "2024-01-15T15:00:27Z",
+    "text": "Agreed. I can have the live data feed hooked up by Wednesday if we freeze the schema tonight.",
+    "metadata": { "speaker": "deon" }
+  },
+  {
+    "id": "pkt_004",
+    "timestamp": "2024-01-15T15:00:42Z",
+    "text": "Let's do that. Rachel, can you prep the slide deck to frame the dashboard walkthrough?",
+    "metadata": { "speaker": "vince" }
+  },
+  {
+    "id": "pkt_005",
+    "timestamp": "2024-01-15T15:00:56Z",
+    "text": "On it. I'll pull from the last QBR deck and update the numbers.",
+    "metadata": { "speaker": "rachel" }
+  },
+  {
+    "id": "pkt_006",
+    "timestamp": "2024-01-15T15:01:10Z",
+    "text": "Hey unrelated, but has anyone looked at the staging server? I'm getting 502s on every request since this morning.",
+    "metadata": { "speaker": "deon" }
+  },
+  {
+    "id": "pkt_007",
+    "timestamp": "2024-01-15T15:01:24Z",
+    "text": "Vince, should we include the export feature in the demo or is that too risky? It's still a bit flaky.",
+    "metadata": { "speaker": "rachel" }
+  },
+  {
+    "id": "pkt_008",
+    "timestamp": "2024-01-15T15:01:38Z",
+    "text": "Leave it out. Let's only show things we know won't break in front of the client.",
+    "metadata": { "speaker": "vince" }
+  },
+  {
+    "id": "pkt_009",
+    "timestamp": "2024-01-15T15:01:52Z",
+    "text": "I just checked — the staging box ran out of disk. Logs filled up the volume. I'm clearing them now.",
+    "metadata": { "speaker": "deon" }
+  },
+  {
+    "id": "pkt_010",
+    "timestamp": "2024-01-15T15:02:05Z",
+    "text": "Good, make sure it's stable. We'll need staging for the demo dry run on Wednesday.",
+    "metadata": { "speaker": "vince" }
+  },
+  {
+    "id": "pkt_011",
+    "timestamp": "2024-01-15T15:02:20Z",
+    "text": "Disk cleared, services are coming back up. Should be good in a few minutes.",
+    "metadata": { "speaker": "deon" }
+  },
+  {
+    "id": "pkt_012",
+    "timestamp": "2024-01-15T15:02:35Z",
+    "text": "Perfect. Rachel, send the deck draft around tomorrow so we can review before Wednesday.",
+    "metadata": { "speaker": "vince" }
+  }
+]
