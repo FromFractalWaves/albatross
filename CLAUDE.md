@@ -24,7 +24,12 @@ uvicorn api.main:app --reload
 python -m pytest tests/ -v
 ```
 
-The CLI entry point is `src/main.py`. The API entry point is `api/main.py` (FastAPI). Both require the venv activated and `.env` with `ANTHROPIC_API_KEY` for live runs.
+```bash
+# Run the Next.js frontend
+cd web && npm run dev
+```
+
+The CLI entry point is `src/main.py`. The API entry point is `api/main.py` (FastAPI). Both require the venv activated and `.env` with `ANTHROPIC_API_KEY` for live runs. The frontend dev server runs on `localhost:3000` and talks to the API on `localhost:8000`.
 
 ## Architecture
 
@@ -48,6 +53,15 @@ FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `src/
 - **`api/routes/scenarios.py`** — `GET /api/scenarios` (list), `GET /api/scenarios/{tier}/{scenario}` (detail). Reads directly from the `data/` directory.
 - **`api/routes/runs.py`** — `POST /api/runs` (start a run), `ws://localhost:8000/ws/runs/{run_id}` (live stream).
 - **`api/services/runner.py`** — `RunManager` orchestrates runs as background asyncio tasks, broadcasts `run_started`, `packet_routed`, `run_complete` messages over WebSocket. Runs are in-memory (no persistence yet).
+
+### Frontend (`web/`)
+
+Next.js (TypeScript, App Router) frontend that connects to the API over WebSocket for live run observation.
+
+- **`web/src/types/trm.ts`** — TypeScript interfaces mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`.
+- **`web/src/types/websocket.ts`** — Discriminated union for WebSocket messages: `RunStarted`, `PacketRouted`, `RunComplete`, `RunError`.
+- **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, error, scenario }`.
+- **`web/src/app/page.tsx`** — Minimal page: starts a run via `POST /api/runs`, connects via WebSocket, renders raw TRM context JSON updating in real time.
 
 ### Tests (`tests/`)
 

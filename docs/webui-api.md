@@ -341,7 +341,7 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 |-------|-------------|--------|
 | 1 | FastAPI skeleton + scenario endpoints | **Done** |
 | 2 | Runner service + WebSocket | **Done** |
-| 3 | Next.js scaffold + raw WebSocket view | Not started |
+| 3 | Next.js scaffold + raw WebSocket view | **Done** |
 | 4 | Live run view UI | Not started |
 | 5 | Scenario browser + run controls | Not started |
 | 6 | Review mode + comparison overlay | Not started |

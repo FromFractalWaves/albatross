@@ -7,4 +7,4 @@ Docs
 DocumentDescriptiondocs/albatross.mdStart here — the Albatross pattern, pipeline stages, and where the TRM fitsdocs/trm_spec.mdTRM specification — packet types, routing decisions, golden dataset structure, scoringdocs/runtime_loop.mdRuntime loop — context schema, per-packet decision cycle, buffering, output formatdocs/planning/trm_v1_plan.mdv1 build plan — scope, architecture, Tier 1 dataset, success criteria
 
 Status
-In progress. Core pipeline is running — packet loading, async queue, and LLM-backed router are all live. One Tier 1 scenario built and passing. Scorer not yet built.
+In progress. Core pipeline running with four Tier 1 scenarios. FastAPI backend serves scenario data and streams live runs over WebSocket. Next.js frontend connects end-to-end — start a run from the browser and watch TRM context update in real time. Scorer not yet built.
