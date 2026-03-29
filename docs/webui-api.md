@@ -88,7 +88,7 @@ The frontend renders state from these messages. It never polls — everything is
 
 **`/` — Scenario Hub.** Lists all scenarios grouped by tier, fetched from `GET /api/scenarios`. Tabs for SCENARIOS (active), LIVE (disabled), HISTORY (disabled). Links to individual scenario detail pages.
 
-**`/run/{run_id}` — Live Run View.** The main screen. During a run: incoming packet highlighted, active threads as columns/lanes with packets stacking, active events with thread links, routing decision badge, buffered packets in a holding area, buffer counter. After a run: same layout with step-through playback and optional comparison overlay against expected output.
+**`/run/{run_id}` — Live Run View.** The main screen. During a run: incoming packet highlighted, active threads as columns/lanes with packets stacking, active events with thread links, routing decision badge, buffered packets in a holding area, buffer counter.
 
 **`/scenarios/{tier}/{scenario}` — Scenario Detail.** Shows README, packet list, expected output (collapsible), run configuration (speed factor, buffer count). "Run This Scenario" button launches a run via `POST /api/runs` and redirects to the live view.
 
@@ -355,31 +355,6 @@ Page:
 
 ---
 
-### Phase 7 — Review Mode + Expected vs Actual Comparison
-
-**Goal:** After a run completes, allow stepping through the results and comparing against expected output.
-
-**What to build:**
-- Playback controls on the run view: step forward, step back, jump to specific packet, auto-play at adjustable speed
-- Run state snapshots — store the context state after each packet so stepping backward is possible without re-running
-- Comparison overlay: when the run source was a scenario, show expected vs actual for each routing decision
-- Decision badges get a green or red background override to indicate match/mismatch (see ui_spec Phase 6 addition)
-- Summary panel: total correct/incorrect thread decisions, event decisions, any cross-contamination
-
-**What NOT to build:** No scorer (formal metric computation). No multi-run comparison. No persistence.
-
-**How to verify:**
-- Complete a run against scenario_02_interleaved
-- Step backward and forward through the packet history
-- See green badges on all 12 packets (assuming the TRM routed correctly)
-- Intentionally break something (e.g. a prompt change that causes a misroute) and see red badges appear
-
-**Depends on:** Phase 6 (scenario context available to the run view for comparison).
-
-**Produces:** A complete scenario development tool: run, observe, compare, iterate on the prompt.
-
----
-
 ## Phase Checklist
 
 | Phase | Description | Status |
@@ -390,4 +365,3 @@ Page:
 | 4 | Dashboard foundation + live view | **Done** |
 | 5 | Events + timeline tabs | **Done** |
 | 6 | Scenario browser + run controls | **Done** |
-| 7 | Review mode + comparison overlay | Not started |

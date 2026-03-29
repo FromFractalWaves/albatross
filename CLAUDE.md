@@ -96,8 +96,9 @@ Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interl
 
 - `docs/albatross.md` — the Albatross pipeline pattern
 - `docs/trm_spec.md` — TRM spec: packet types, routing decisions, golden dataset tiers, scoring metrics
-- `docs/runtime_loop.md` — per-packet execution loop, context schema, buffering, open problems
+- `docs/trm_runtime_loop.md` — per-packet execution loop, context schema, buffering, open problems
+- `docs/albatross_runtime_loop.md` — Albatross-level runtime loop
 - `docs/trm_outline.md` — current state and next steps
-- `docs/webui-api.md` — 7-phase plan for web UI and API (Phases 1–6 done, Phase 7 next)
+- `docs/webui-api.md` — 6-phase plan for web UI and API (all phases done)
 - `docs/ui_spec.md` — visual design spec: design tokens, component specs, layout, interaction patterns
 - `docs/ui_mockup.jsx` — interactive React mockup with inline styles and mock data, component reference for Phase 4+

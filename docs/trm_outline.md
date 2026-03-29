@@ -61,7 +61,8 @@ thread-routing-module/
 ├── docs/
 │   ├── albatross.md
 │   ├── trm_spec.md
-│   ├── runtime_loop.md
+│   ├── trm_runtime_loop.md
+│   ├── albatross_runtime_loop.md
 │   ├── webui-api.md
 │   ├── ui_spec.md
 │   ├── ui_mockup.jsx
@@ -154,6 +155,5 @@ thread-routing-module/
 
 ## What's Next
 
-1. Review mode + expected vs actual comparison (webui-api Phase 7)
-2. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
-3. Run all four scenarios through the scorer and iterate on the system prompt until passing
+1. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
+2. Run all four scenarios through the scorer and iterate on the system prompt until passing
