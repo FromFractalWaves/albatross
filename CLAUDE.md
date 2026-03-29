@@ -67,9 +67,9 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 - **`web/src/types/websocket.ts`** — Discriminated union for WebSocket messages: `RunStarted`, `PacketRouted`, `RunComplete`, `RunError`.
 - **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, error, scenario }`.
 - **`web/src/lib/`** — `utils.ts` (cn helper), `threadColors.ts` (rotating color palette for threads), `packetDecisions.ts` (joins routing records to packets by ID).
-- **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `IncomingBanner`, `TopBar`, `ContextInspector`.
+- **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`.
 - **`web/src/app/page.tsx`** — Run launcher: starts a run via `POST /api/runs` and redirects to `/run/{runId}`.
-- **`web/src/app/run/[runId]/page.tsx`** — Live run dashboard: visual thread lanes, incoming packet banner, decision badges, top bar with stats, collapsible context inspector. Tab bar with LIVE active (EVENTS and TIMELINE tabs present but disabled — Phase 5).
+- **`web/src/app/run/[runId]/page.tsx`** — Live run dashboard with three tabs: LIVE (thread lanes with color-coded packets), EVENTS (event cards with thread links), TIMELINE (chronological packet list). Incoming packet banner, buffer zone, decision badges, top bar with stats, collapsible context inspector.
 
 ### Tests (`tests/`)
 
@@ -96,6 +96,6 @@ Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interl
 - `docs/trm_spec.md` — TRM spec: packet types, routing decisions, golden dataset tiers, scoring metrics
 - `docs/runtime_loop.md` — per-packet execution loop, context schema, buffering, open problems
 - `docs/trm_outline.md` — current state and next steps
-- `docs/webui-api.md` — 7-phase plan for web UI and API (Phases 1–4 done, Phase 5 next)
+- `docs/webui-api.md` — 7-phase plan for web UI and API (Phases 1–5 done, Phase 6 next)
 - `docs/ui_spec.md` — visual design spec: design tokens, component specs, layout, interaction patterns
 - `docs/ui_mockup.jsx` — interactive React mockup with inline styles and mock data, component reference for Phase 4+

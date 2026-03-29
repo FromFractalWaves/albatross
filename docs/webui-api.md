@@ -86,11 +86,11 @@ The frontend renders state from these messages. It never polls — everything is
 
 #### Pages
 
-**`/` — Dashboard.** Landing page. Shows available scenarios grouped by tier, plus a quick-start button for common actions.
+**`/` — Run Launcher.** Starts a run via `POST /api/runs` and redirects to `/run/{runId}`. Currently hardcoded to scenario_02_interleaved. Will become a full scenario browser in Phase 6.
 
 **`/run/{run_id}` — Live Run View.** The main screen. During a run: incoming packet highlighted, active threads as columns/lanes with packets stacking, active events with thread links, routing decision badge, buffered packets in a holding area, buffer counter. After a run: same layout with step-through playback and optional comparison overlay against expected output.
 
-**`/scenarios` — Scenario Browser.** List of all scenarios by tier. Click into one for README, packets, expected output. Button to launch a run.
+**`/scenarios` — Scenario Browser.** *(Phase 6 — not yet built.)* List of all scenarios by tier. Click into one for README, packets, expected output. Button to launch a run.
 
 #### Key UI Components
 
@@ -130,8 +130,7 @@ thread-routing-module/
 │       └── router.py
 ├── data/                       # Existing scenarios (unchanged)
 └── docs/
-    └── planning/
-        └── webui_plan.md       # This document
+    └── webui-api.md            # This document
 ```
 
 The `api/` layer imports from `src/` — it wraps the existing pipeline, it doesn't replace it.
@@ -282,7 +281,7 @@ Dashboard components:
 - `web/src/components/ContextInspector.tsx` — collapsible panel: header row with chevron toggle, expandable `<pre>` block with raw TRMContext JSON
 
 Page:
-- `web/src/app/run/[runId]/page.tsx` — the live run view. Wires `useRunSocket` to all components above. Tab bar present with LIVE tab active (EVENTS and TIMELINE tabs visible but disabled/placeholder — built in Phase 5)
+- `web/src/app/run/[runId]/page.tsx` — the live run view. Wires `useRunSocket` to all components above. Three-tab interface: LIVE (thread lanes), EVENTS (event cards), TIMELINE (chronological packet list). Uses `hidden` class for tab switching to preserve scroll position.
 
 **Build order:** Badge → DecisionBadge → SectionHeader → PacketCard → ThreadLane → IncomingBanner → TopBar → ContextInspector → run page (wire everything)
 
@@ -389,6 +388,6 @@ Page:
 | 2 | Runner service + WebSocket | **Done** |
 | 3 | Next.js scaffold + raw WebSocket view | **Done** |
 | 4 | Dashboard foundation + live view | **Done** |
-| 5 | Events + timeline tabs | Not started |
+| 5 | Events + timeline tabs | **Done** |
 | 6 | Scenario browser + run controls | Not started |
 | 7 | Review mode + comparison overlay | Not started |

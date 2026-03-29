@@ -27,9 +27,9 @@
 - TypeScript types mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`, plus WebSocket message types (`RunStartedMessage`, `PacketRoutedMessage`, `RunCompleteMessage`, `RunErrorMessage`)
 - `useRunSocket` hook — opens a WebSocket, parses messages via `useReducer`, tracks `context`, `routingRecords`, `latestPacketId`, `incomingPacket`, `status`, `error`, and `scenario`
 - Utility libraries: `threadColors.ts` (rotating color palette), `packetDecisions.ts` (joins routing records to packets), `utils.ts` (cn helper)
-- Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `IncomingBanner`, `TopBar`, `ContextInspector`
+- Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`
 - Home page (`page.tsx`) — launches a run and redirects to `/run/{runId}`
-- Live run page (`run/[runId]/page.tsx`) — visual dashboard: thread lanes with color-coded packets, incoming packet banner with pulsing LLM indicator, decision badges, top bar with status/stats, collapsible context inspector. Tab bar with LIVE active (EVENTS/TIMELINE disabled — Phase 5)
+- Live run page (`run/[runId]/page.tsx`) — visual dashboard with three tabs: LIVE (thread lanes with color-coded packets), EVENTS (event cards with thread links), TIMELINE (chronological packet list). Incoming packet banner with pulsing LLM indicator, buffer zone for deferred packets, decision badges, top bar with status/stats, collapsible context inspector
 
 ### Tests (`tests/`)
 
@@ -61,10 +61,12 @@ thread-routing-module/
 │   ├── trm_spec.md
 │   ├── runtime_loop.md
 │   ├── webui-api.md
+│   ├── ui_spec.md
+│   ├── ui_mockup.jsx
 │   └── trm_outline.md
 ├── tests/
 │   ├── conftest.py           # Shared fixtures (async test client)
-│   ├── test_scenarios.py     # Scenario endpoint tests (8)
+│   ├── test_scenarios.py     # Scenario endpoint tests (9)
 │   └── test_runs.py          # Run + WebSocket tests (7)
 ├── dev.sh                        # Launch API + frontend together
 ├── web/
@@ -78,13 +80,16 @@ thread-routing-module/
 │   │   │           └── page.tsx  # Live run dashboard
 │   │   ├── components/
 │   │   │   ├── Badge.tsx         # Reusable badge (default/solid/outline)
+│   │   │   ├── BufferZone.tsx    # Amber-themed section for buffered packets
+│   │   │   ├── ContextInspector.tsx # Collapsible raw JSON inspector
 │   │   │   ├── DecisionBadge.tsx # Routing decision badge (new/existing/none/buffer/unknown)
-│   │   │   ├── SectionHeader.tsx # Section header with optional count
-│   │   │   ├── PacketCard.tsx    # Packet row with speaker, text, decision badges
-│   │   │   ├── ThreadLane.tsx    # Thread column with color-coded packet list
+│   │   │   ├── EventCard.tsx     # Event card with status, label, thread link badges
 │   │   │   ├── IncomingBanner.tsx # Incoming packet banner with pulsing indicator
-│   │   │   ├── TopBar.tsx        # Sticky top bar with status and stats
-│   │   │   └── ContextInspector.tsx # Collapsible raw JSON inspector
+│   │   │   ├── PacketCard.tsx    # Packet row with speaker, text, decision badges
+│   │   │   ├── SectionHeader.tsx # Section header with optional count
+│   │   │   ├── ThreadLane.tsx    # Thread column with color-coded packet list
+│   │   │   ├── TimelineRow.tsx   # Compact horizontal row for timeline view
+│   │   │   └── TopBar.tsx        # Sticky top bar with status and stats
 │   │   ├── hooks/
 │   │   │   └── useRunSocket.ts   # WebSocket hook with useReducer
 │   │   ├── lib/
@@ -139,8 +144,7 @@ thread-routing-module/
 
 ## What's Next
 
-1. Events + Timeline tabs — complete the dashboard's three-tab interface (webui-api Phase 5)
-2. Scenario browser + run controls (Phase 6)
+1. Scenario browser + run controls (webui-api Phase 6)
 3. Review mode + expected vs actual comparison (Phase 7)
 4. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
 5. Run all four scenarios through the scorer and iterate on the system prompt until passing

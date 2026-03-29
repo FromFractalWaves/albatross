@@ -4,7 +4,15 @@ The TRM is the intelligence layer of any Albatross pipeline. It takes a stream o
 If you're new here, start with the Albatross spec. Everything else will make more sense after that.
 
 Docs
-DocumentDescriptiondocs/albatross.mdStart here — the Albatross pattern, pipeline stages, and where the TRM fitsdocs/trm_spec.mdTRM specification — packet types, routing decisions, golden dataset structure, scoringdocs/runtime_loop.mdRuntime loop — context schema, per-packet decision cycle, buffering, output formatdocs/planning/trm_v1_plan.mdv1 build plan — scope, architecture, Tier 1 dataset, success criteria
+| Document | Description |
+|----------|-------------|
+| `docs/albatross.md` | Start here — the Albatross pattern, pipeline stages, and where the TRM fits |
+| `docs/trm_spec.md` | TRM specification — packet types, routing decisions, golden dataset structure, scoring |
+| `docs/runtime_loop.md` | Runtime loop — context schema, per-packet decision cycle, buffering, output format |
+| `docs/trm_outline.md` | Current state and next steps |
+| `docs/webui-api.md` | 7-phase plan for web UI and API |
+| `docs/ui_spec.md` | Visual design spec — design tokens, component specs, layout, interaction patterns |
+| `docs/ui_mockup.jsx` | Interactive React mockup — component reference for dashboard implementation |
 
 Status
-In progress. Core pipeline running with four Tier 1 scenarios. FastAPI backend serves scenario data and streams live runs over WebSocket. Next.js frontend connects end-to-end — start a run from the browser and watch TRM context update in real time. Scorer not yet built.
+In progress. Core pipeline running with four Tier 1 scenarios. FastAPI backend serves scenario data and streams live runs over WebSocket. Next.js frontend with visual dashboard — three-tab interface (live thread lanes, events view, chronological timeline) with color-coded packets, decision badges, buffer zone, and live stats. Scorer not yet built.

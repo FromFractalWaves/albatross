@@ -25,11 +25,11 @@ async def create_run(body: CreateRunRequest, request: Request):
 async def run_websocket(websocket: WebSocket, run_id: str):
     run_manager = websocket.app.state.run_manager
 
+    await websocket.accept()
+
     if run_id not in run_manager.runs:
         await websocket.close(code=4004, reason="Run not found")
         return
-
-    await websocket.accept()
 
     run = run_manager.subscribe(run_id, websocket)
 
