@@ -26,9 +26,11 @@
 - Next.js (TypeScript, App Router) with Tailwind CSS v4, custom design tokens, JetBrains Mono font
 - TypeScript types mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`, plus WebSocket message types (`RunStartedMessage`, `PacketRoutedMessage`, `RunCompleteMessage`, `RunErrorMessage`)
 - `useRunSocket` hook — opens a WebSocket, parses messages via `useReducer`, tracks `context`, `routingRecords`, `latestPacketId`, `incomingPacket`, `status`, `error`, and `scenario`
-- Utility libraries: `threadColors.ts` (rotating color palette), `packetDecisions.ts` (joins routing records to packets), `utils.ts` (cn helper)
-- Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`
-- Home page (`page.tsx`) — launches a run and redirects to `/run/{runId}`
+- Utility libraries: `threadColors.ts` (rotating color palette), `packetDecisions.ts` (joins routing records to packets), `utils.ts` (cn helper), `api.ts` (API_BASE and WS_BASE constants)
+- Scenario types: `types/scenarios.ts` (`ScenarioSummary`, `TierGroup`, `ScenarioDetail`, `ScenarioPacket`, `ExpectedOutput`)
+- Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`, `HubTopBar`, `TabBar`
+- Scenario hub (`page.tsx`) — lists all scenarios grouped by tier, links to detail pages
+- Scenario detail page (`scenarios/[tier]/[scenario]/page.tsx`) — renders README, packet list, expected output (collapsible), run config (speed factor, buffer count), launches run and redirects to `/run/{runId}`
 - Live run page (`run/[runId]/page.tsx`) — visual dashboard with three tabs: LIVE (thread lanes with color-coded packets), EVENTS (event cards with thread links), TIMELINE (chronological packet list). Incoming packet banner with pulsing LLM indicator, buffer zone for deferred packets, decision badges, top bar with status/stats, collapsible context inspector
 
 ### Tests (`tests/`)
@@ -74,7 +76,11 @@ thread-routing-module/
 │   │   ├── app/
 │   │   │   ├── globals.css       # Design tokens (Tailwind v4 @theme), base styles
 │   │   │   ├── layout.tsx        # Root layout, JetBrains Mono font
-│   │   │   ├── page.tsx          # Run launcher — redirects to /run/{runId}
+│   │   │   ├── page.tsx          # Scenario hub — lists tiers and scenarios
+│   │   │   ├── scenarios/
+│   │   │   │   └── [tier]/
+│   │   │   │       └── [scenario]/
+│   │   │   │           └── page.tsx  # Scenario detail — README, packets, run config
 │   │   │   └── run/
 │   │   │       └── [runId]/
 │   │   │           └── page.tsx  # Live run dashboard
@@ -89,16 +95,20 @@ thread-routing-module/
 │   │   │   ├── SectionHeader.tsx # Section header with optional count
 │   │   │   ├── ThreadLane.tsx    # Thread column with color-coded packet list
 │   │   │   ├── TimelineRow.tsx   # Compact horizontal row for timeline view
-│   │   │   └── TopBar.tsx        # Sticky top bar with status and stats
+│   │   │   ├── TopBar.tsx        # Sticky top bar with status and stats
+│   │   │   ├── HubTopBar.tsx    # Top bar for the scenario hub
+│   │   │   └── TabBar.tsx       # Reusable tab bar component
 │   │   ├── hooks/
 │   │   │   └── useRunSocket.ts   # WebSocket hook with useReducer
 │   │   ├── lib/
 │   │   │   ├── utils.ts          # cn() helper (clsx + tailwind-merge)
 │   │   │   ├── threadColors.ts   # Thread color palette mapping
-│   │   │   └── packetDecisions.ts # Routing record lookup by packet ID
+│   │   │   ├── packetDecisions.ts # Routing record lookup by packet ID
+│   │   │   └── api.ts            # API_BASE, WS_BASE constants
 │   │   └── types/
 │   │       ├── trm.ts            # ReadyPacket, Thread, Event, RoutingRecord, TRMContext
-│   │       └── websocket.ts      # RunStarted, PacketRouted, RunComplete, RunError messages
+│   │       ├── websocket.ts      # RunStarted, PacketRouted, RunComplete, RunError messages
+│   │       └── scenarios.ts      # ScenarioSummary, TierGroup, ScenarioDetail, etc.
 │   └── ...
 └── src/
     ├── main.py
@@ -144,7 +154,6 @@ thread-routing-module/
 
 ## What's Next
 
-1. Scenario browser + run controls (webui-api Phase 6)
-3. Review mode + expected vs actual comparison (Phase 7)
-4. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
-5. Run all four scenarios through the scorer and iterate on the system prompt until passing
+1. Review mode + expected vs actual comparison (webui-api Phase 7)
+2. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
+3. Run all four scenarios through the scorer and iterate on the system prompt until passing

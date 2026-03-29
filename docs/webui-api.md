@@ -86,11 +86,11 @@ The frontend renders state from these messages. It never polls — everything is
 
 #### Pages
 
-**`/` — Run Launcher.** Starts a run via `POST /api/runs` and redirects to `/run/{runId}`. Currently hardcoded to scenario_02_interleaved. Will become a full scenario browser in Phase 6.
+**`/` — Scenario Hub.** Lists all scenarios grouped by tier, fetched from `GET /api/scenarios`. Tabs for SCENARIOS (active), LIVE (disabled), HISTORY (disabled). Links to individual scenario detail pages.
 
 **`/run/{run_id}` — Live Run View.** The main screen. During a run: incoming packet highlighted, active threads as columns/lanes with packets stacking, active events with thread links, routing decision badge, buffered packets in a holding area, buffer counter. After a run: same layout with step-through playback and optional comparison overlay against expected output.
 
-**`/scenarios` — Scenario Browser.** *(Phase 6 — not yet built.)* List of all scenarios by tier. Click into one for README, packets, expected output. Button to launch a run.
+**`/scenarios/{tier}/{scenario}` — Scenario Detail.** Shows README, packet list, expected output (collapsible), run configuration (speed factor, buffer count). "Run This Scenario" button launches a run via `POST /api/runs` and redirects to the live view.
 
 #### Key UI Components
 
@@ -389,5 +389,5 @@ Page:
 | 3 | Next.js scaffold + raw WebSocket view | **Done** |
 | 4 | Dashboard foundation + live view | **Done** |
 | 5 | Events + timeline tabs | **Done** |
-| 6 | Scenario browser + run controls | Not started |
+| 6 | Scenario browser + run controls | **Done** |
 | 7 | Review mode + comparison overlay | Not started |
