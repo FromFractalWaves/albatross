@@ -9,13 +9,14 @@ class CreateRunRequest(BaseModel):
     tier: str
     scenario: str
     speed_factor: float = 20.0
+    buffer_count: int = 5
 
 
 @router.post("/api/runs")
 async def create_run(body: CreateRunRequest, request: Request):
     run_manager = request.app.state.run_manager
     try:
-        run_id = run_manager.create_run(body.tier, body.scenario, body.speed_factor)
+        run_id = run_manager.create_run(body.tier, body.scenario, body.speed_factor, body.buffer_count)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return {"run_id": run_id}

@@ -3,8 +3,7 @@
 import { useEffect, useReducer } from "react";
 import type { ReadyPacket, RoutingRecord, TRMContext } from "@/types/trm";
 import type { WSMessage } from "@/types/websocket";
-
-const WS_BASE = "ws://localhost:8000";
+import { WS_BASE } from "@/lib/api";
 
 export type RunStatus = "idle" | "connecting" | "running" | "complete" | "error";
 

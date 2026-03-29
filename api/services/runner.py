@@ -25,6 +25,7 @@ class Run:
     scenario_tier: str
     scenario_name: str
     speed_factor: float
+    buffer_count: int = 5
     messages: list[dict] = field(default_factory=list)
     subscribers: list[WebSocket] = field(default_factory=list)
     router: TRMRouter | None = None
@@ -34,7 +35,7 @@ class RunManager:
     def __init__(self):
         self.runs: dict[str, Run] = {}
 
-    def create_run(self, tier: str, scenario: str, speed_factor: float) -> str:
+    def create_run(self, tier: str, scenario: str, speed_factor: float, buffer_count: int = 5) -> str:
         packets_path = DATA_DIR / tier / scenario / "packets.json"
         if not packets_path.exists():
             raise FileNotFoundError(f"Scenario not found: {tier}/{scenario}")
@@ -46,6 +47,7 @@ class RunManager:
             scenario_tier=tier,
             scenario_name=scenario,
             speed_factor=speed_factor,
+            buffer_count=buffer_count,
         )
         self.runs[run_id] = run
         asyncio.create_task(self._execute_run(run, packets_path))
@@ -56,7 +58,7 @@ class RunManager:
             run.status = "running"
             queue = PacketQueue()
             loader = PacketLoader(packets_path, queue, speed_factor=run.speed_factor)
-            router = TRMRouter(buffers=5)
+            router = TRMRouter(buffers=run.buffer_count)
             run.router = router
 
             await self._broadcast(run, {

@@ -11,6 +11,7 @@ import { EventCard } from "@/components/EventCard";
 import { TimelineRow } from "@/components/TimelineRow";
 import { BufferZone } from "@/components/BufferZone";
 import { SectionHeader } from "@/components/SectionHeader";
+import { TabBar } from "@/components/TabBar";
 import { ContextInspector } from "@/components/ContextInspector";
 
 type Tab = "live" | "events" | "timeline";
@@ -77,24 +78,11 @@ export default function RunPage({ params }: { params: Promise<{ runId: string }>
         )}
 
         {/* Tab Bar */}
-        <div className="flex gap-0.5">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => !tab.disabled && setActiveTab(tab.id)}
-              disabled={tab.disabled}
-              className={`px-3.5 py-1.5 text-[11px] font-semibold font-mono uppercase tracking-[0.06em] rounded-[5px] border-none transition-all duration-150 ${
-                activeTab === tab.id
-                  ? "bg-elevated text-text-primary"
-                  : tab.disabled
-                    ? "text-text-muted opacity-50 cursor-not-allowed"
-                    : "text-text-muted cursor-pointer hover:text-text-secondary"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <TabBar
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as Tab)}
+        />
 
         {/* Error display */}
         {error && (
