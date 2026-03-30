@@ -105,7 +105,7 @@ The frontend renders state from these messages. It never polls — everything is
 ### File Structure
 
 ```
-thread-routing-module/
+albatross/
 ├── api/                        # FastAPI backend
 │   ├── main.py                 # App setup, CORS, lifespan
 │   ├── routes/

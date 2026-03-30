@@ -44,7 +44,7 @@
 ## File Structure
 
 ```
-thread-routing-module/
+albatross/
 ├── api/
 │   ├── main.py               # FastAPI app, CORS, RunManager setup
 │   ├── routes/

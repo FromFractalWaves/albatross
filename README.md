@@ -1,4 +1,4 @@
-thread-routing-module
+albatross
 The Thread Routing Module (TRM) is a component of Albatross — a general-purpose pipeline for turning continuous data streams into structured, queryable intelligence.
 The TRM is the intelligence layer of any Albatross pipeline. It takes a stream of processed packets and does two things: figures out who is talking to whom (threads), and figures out what real-world thing they're talking about (events).
 If you're new here, start with the Albatross spec. Everything else will make more sense after that.
