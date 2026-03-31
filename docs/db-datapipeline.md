@@ -4,7 +4,7 @@
 
 ---
 
-## Sub-phase 3.1 — Database Schema + ORM Setup
+## Sub-phase 3.1 — Database Schema + ORM Setup ✅
 
 ### Stack
 

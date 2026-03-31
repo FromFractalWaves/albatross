@@ -16,7 +16,7 @@ Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for 
 
 **Phase 3 — Database & Inter-Module Data Pipeline.** See `docs/albatross_phase_3.md` for the plan and `docs/db-datapipeline.md` for implementation specs.
 
-Phases 1 (TRM core) and 2 (Web UI + API) are complete. The system currently works but has no persistence — runs are in-memory and page refresh loses state. Phase 3 introduces a shared database, a contracts layer, a mock pipeline driven by synthetic radio data, and UI hydration from the DB on load.
+Phases 1 (TRM core) and 2 (Web UI + API) are complete. Sub-phase 3.1 (DB schema + ORM) is complete — the `db/` package with 5 ORM models, Alembic migrations, and async session factory is in place. Next up: sub-phase 3.2 (contracts layer).
 
 The existing scenario tooling (`data/`, `api/`, `src/`, `web/`) is **not being replaced** — it continues to work as-is for development and tuning. Phase 3 adds new modules alongside it.
 
@@ -34,6 +34,9 @@ uvicorn api.main:app --reload
 
 # Run tests (no API key needed — LLM calls are mocked)
 python -m pytest tests/ -v
+
+# Run database migrations
+alembic upgrade head
 ```
 
 ```bash
@@ -63,6 +66,15 @@ The pipeline has three stages wired together with asyncio:
 - **`packets.py`**: `ProcessedPacket` (id, timestamp, text, metadata dict) and `ReadyPacket` (alias).
 - **`router.py`**: `ThreadDecision`/`EventDecision` enums, `Thread`, `Event`, `RoutingRecord`, `TRMContext`. All Pydantic models — context is serialized with `model_dump(mode="json")`.
 
+### Database (`db/`)
+
+SQLAlchemy 2.0 async ORM with Alembic migrations. Dev engine is SQLite via `aiosqlite`. Prod engine will be PostgreSQL via `asyncpg`.
+
+- **`db/base.py`** — `DeclarativeBase` subclass.
+- **`db/models.py`** — 5 ORM models: `Transmission`, `Thread`, `Event`, `ThreadEvent`, `RoutingRecord`.
+- **`db/session.py`** — Async engine from `DATABASE_URL` env var (default `sqlite+aiosqlite:///./albatross.db`), `AsyncSessionLocal` factory, `get_session` dependency.
+- **`db/migrations/`** — Alembic migrations. `env.py` configured for async with `render_as_batch=True` for SQLite.
+
 ### API (`api/`)
 
 FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `src/` — it wraps the existing pipeline, it doesn't replace it.
@@ -86,7 +98,7 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 16 tests total: scenario endpoints (9 tests) and run/WebSocket flow (7 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 23 tests total: scenario endpoints (9 tests), run/WebSocket flow (7 tests), and database models (7 tests).
 
 ### Key Design Decisions
 

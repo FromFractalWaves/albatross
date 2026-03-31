@@ -33,11 +33,19 @@
 - Scenario detail page (`scenarios/[tier]/[scenario]/page.tsx`) — renders README, packet list, expected output (collapsible), run config (speed factor, buffer count), launches run and redirects to `/run/{runId}`
 - Live run page (`run/[runId]/page.tsx`) — visual dashboard with three tabs: LIVE (thread lanes with color-coded packets), EVENTS (event cards with thread links), TIMELINE (chronological packet list). Incoming packet banner with pulsing LLM indicator, buffer zone for deferred packets, decision badges, top bar with status/stats, collapsible context inspector
 
+### Database (`db/`)
+
+- SQLAlchemy 2.0 async ORM with Alembic migrations
+- 5 models: `Transmission` (grows through pipeline stages), `Thread`, `Event`, `ThreadEvent` (join table), `RoutingRecord` (audit log)
+- Async session factory from `DATABASE_URL` env var, defaults to SQLite via `aiosqlite`
+- Alembic configured for async with `render_as_batch=True` for SQLite compatibility
+
 ### Tests (`tests/`)
 
-- 16 tests total, all mocked (no API key needed)
+- 23 tests total, all mocked (no API key needed)
 - Scenario endpoint tests (9): list, sort order, detail content, structure, 404 handling
 - Run/WebSocket tests (7): run creation, validation, full WebSocket integration (verifies message ordering, backlog delivery, end-to-end flow with mocked LLM)
+- Database model tests (7): imports, table creation, CRUD for all 5 models
 
 ---
 
@@ -52,6 +60,13 @@ albatross/
 │   │   └── runs.py           # POST /api/runs, WebSocket /ws/runs/{run_id}
 │   └── services/
 │       └── runner.py         # RunManager — wraps TRM pipeline, manages run state
+├── db/
+│   ├── base.py               # DeclarativeBase
+│   ├── models.py             # Transmission, Thread, Event, ThreadEvent, RoutingRecord
+│   ├── session.py            # Async engine, session factory, get_session dependency
+│   └── migrations/
+│       ├── env.py            # Async Alembic config
+│       └── versions/         # Migration scripts
 ├── data/
 │   └── tier_one/
 │       ├── scenario_01_simple_two_party/
@@ -68,9 +83,10 @@ albatross/
 │   ├── ui_mockup.jsx
 │   └── trm_outline.md
 ├── tests/
-│   ├── conftest.py           # Shared fixtures (async test client)
+│   ├── conftest.py           # Shared fixtures (async test client, DB engine/session)
 │   ├── test_scenarios.py     # Scenario endpoint tests (9)
-│   └── test_runs.py          # Run + WebSocket tests (7)
+│   ├── test_runs.py          # Run + WebSocket tests (7)
+│   └── test_db.py            # Database model tests (7)
 ├── dev.sh                        # Launch API + frontend together
 ├── web/
 │   ├── src/
@@ -155,5 +171,11 @@ albatross/
 
 ## What's Next
 
-1. Build the Scorer — compare `RoutingRecord` list against `expected_output.json`, compute per-metric and composite scores
-2. Run all four scenarios through the scorer and iterate on the system prompt until passing
+Phase 3 is in progress. Sub-phase 3.1 (DB schema + ORM) is complete. Remaining:
+
+1. **Sub-phase 3.2** — Contracts layer (`contracts/models.py`) — shared Pydantic types for cross-module boundaries
+2. **Sub-phase 3.2b** — Mock capture + preprocessing scripts, DB reset utility
+3. **Sub-phase 3.3** — TRM persistence layer + `main_live.py` DB-driven entry point
+4. **Sub-phase 3.4** — UI hydration from database + live WebSocket updates
+
+Future (post Phase 3): Scorer, prompt iteration, real ASR integration

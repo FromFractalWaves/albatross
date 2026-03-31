@@ -1,4 +1,5 @@
 node/
 .ctree
 .env
+*.db
 
