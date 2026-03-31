@@ -387,22 +387,65 @@ The existing `TRMRouter._apply()` method updates in-memory state. A persistence 
 
 A new DB-driven entry point is added alongside the existing scenario runner. Scenario tooling is completely unaffected.
 
+### Enum → String Alignment
+
+`_apply()` currently uses `ThreadDecision` and `EventDecision` enums for comparisons internally. The contracts `RoutingRecord` uses string literals (`'new'`, `'existing'`, etc.) — this was established in 3.2. The persistence layer works with the string-based `RoutingRecord` from contracts, so comparisons in `persist_routing_result()` use string literals throughout. No enum imports needed in the persistence layer.
+
+### to_orm() Convention
+
+`RoutingRecord` in `contracts/models.py` gets a `to_orm()` classmethod, same pattern as `TransmissionPacket.to_orm()` established in 3.2b. Lazy import, colocated with the type definition:
+
+```python
+class RoutingRecord(BaseModel):
+    ...
+    def to_orm(self, packet_id: str) -> "db.models.RoutingRecord":
+        from db.models import RoutingRecord as ORMRoutingRecord
+        return ORMRoutingRecord(
+            packet_id=packet_id,
+            thread_decision=self.thread_decision,
+            thread_id=self.thread_id,
+            event_decision=self.event_decision,
+            event_id=self.event_id,
+        )
+```
+
 ### New Entry Point
 
-`src/main_live.py` — polls for `processed` records from the DB, feeds them into `TRMRouter`, writes results back.
+`src/main_live.py` — polls for `processed` records from the DB, feeds them into `TRMRouter`, writes results back. Follows the same exit condition pattern as `preprocessing/mock/run.py` — idle cycle counter, exits when nothing remains.
 
 ```python
 # Pseudocode
+idle_cycles = 0
+MAX_IDLE = 10  # exit after ~20 seconds of nothing
+
 while True:
-    packet = await db.fetch_one("SELECT * FROM transmissions WHERE status = 'processed' LIMIT 1")
+    async with AsyncSessionLocal() as session:
+        packet = await fetch_next_processed(session)
+
     if not packet:
+        idle_cycles += 1
+        if idle_cycles >= MAX_IDLE:
+            logger.info("[TRM] no more packets — exiting")
+            break
         await asyncio.sleep(2)
         continue
 
-    await db.update_status(packet.id, 'routing')
-    ready_packet = ReadyPacket(id=packet.id, timestamp=packet.timestamp, text=packet.text, metadata=...)
+    idle_cycles = 0
+    async with AsyncSessionLocal() as session:
+        await update_status(session, packet.id, 'routing')
+
+    ready_packet = ReadyPacket(
+        id=packet.id,
+        timestamp=str(packet.timestamp),
+        text=packet.text,
+        metadata={"talkgroup_id": packet.talkgroup_id, "source_unit": packet.source_unit, ...}
+    )
     record = await router.route(ready_packet)
-    await db.persist_routing_result(packet.id, record, router.context)
+
+    async with AsyncSessionLocal() as session:
+        await persist_routing_result(session, packet.id, record, router.context)
+
+    logger.info(f"[TRM] {packet.id} → thread={record.thread_decision}:{record.thread_id} event={record.event_decision}:{record.event_id}")
 ```
 
 ### Persistence Function
@@ -410,22 +453,22 @@ while True:
 `db/persist_routing_result()` — called after every successful `router.route()` call. Must be atomic per packet.
 
 **Insertion order within the transaction matters** due to the circular FK between `events.opened_at` and `transmissions.id`:
-- `transmissions` must exist before `events.opened_at` can reference it
-- `threads` and `events` must exist before `transmissions.thread_id` / `transmissions.event_id` can reference them
+- `transmissions` already exists (written by capture)
+- `threads` and `events` must be upserted before `transmissions` can reference them via `thread_id` / `event_id`
+- `events.opened_at` references `transmissions.id` which already exists — safe to set on upsert
 
 The safe order within each transaction:
 
 ```python
 async def persist_routing_result(session, packet_id, record, context):
     async with session.begin():
-        # 1. Upsert thread (threads.id must exist before transmissions.thread_id references it)
+        # 1. Upsert thread — must exist before transmissions.thread_id references it
         if record.thread_decision in ('new', 'existing'):
             thread = get_thread_from_context(context, record.thread_id)
             await upsert_thread(session, thread)
 
-        # 2. Upsert event WITHOUT opened_at first if it's new
-        #    (event needs to exist before transmissions.event_id references it,
-        #     but events.opened_at references transmissions which already exists)
+        # 2. Upsert event — must exist before transmissions.event_id references it
+        #    events.opened_at → transmissions.id is safe because the transmission already exists
         if record.event_decision in ('new', 'existing'):
             event = get_event_from_context(context, record.event_id)
             await upsert_event(session, event)
@@ -434,8 +477,8 @@ async def persist_routing_result(session, packet_id, record, context):
         if record.thread_id and record.event_id:
             await upsert_thread_event(session, record.thread_id, record.event_id)
 
-        # 4. Write routing record
-        await insert_routing_record(session, record)
+        # 4. Write routing record (uses record.to_orm())
+        await session.merge(record.to_orm(packet_id))
 
         # 5. Update transmission — thread_id and event_id now have valid FK targets
         await update_transmission(session, packet_id, record)
@@ -449,6 +492,7 @@ async def persist_routing_result(session, packet_id, record, context):
 - All records in `transmissions` end with `status = 'routed'`
 - `threads`, `events`, `thread_events`, and `routing_records` tables are populated correctly
 - In-memory TRM state and DB state match after every packet
+- Script exits cleanly after all packets are routed
 
 ---
 
