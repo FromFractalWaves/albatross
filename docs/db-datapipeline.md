@@ -242,7 +242,7 @@ Changes are mechanical — find/replace imports, verify tests still pass.
 - `contracts/models.py` exists and is importable
 - `src/models/packets.py` reconciled — `ProcessedPacket` and `ReadyPacket` definitions match contracts
 - No file imports boundary types from `src/models/` directly
-- All 16 tests still pass
+- All 23 tests still pass
 
 ---
 
