@@ -51,3 +51,14 @@ class RoutingRecord(BaseModel):
     thread_id: Optional[str] = None
     event_decision: str    # 'new' | 'existing' | 'none' | 'unknown'
     event_id: Optional[str] = None
+
+    def to_orm(self):
+        """Convert to SQLAlchemy RoutingRecord model."""
+        from db.models import RoutingRecord as ORMRoutingRecord
+        return ORMRoutingRecord(
+            packet_id=self.packet_id,
+            thread_decision=self.thread_decision,
+            thread_id=self.thread_id,
+            event_decision=self.event_decision,
+            event_id=self.event_id,
+        )

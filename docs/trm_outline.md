@@ -49,14 +49,21 @@
 - Async session factory from `DATABASE_URL` env var, defaults to SQLite via `aiosqlite`
 - Alembic configured for async with `render_as_batch=True` for SQLite compatibility
 
+### TRM Persistence Layer (`db/persist.py`, `src/main_live.py`)
+
+- `db/persist.py` — `persist_routing_result()`: atomic per-packet persistence within a single DB transaction. Upserts thread, event, thread_events join, writes routing record via `RoutingRecord.to_orm()`, updates transmission status to `routed`.
+- `src/main_live.py` — DB-driven TRM entry point. Polls for `status = 'processed'` transmissions, feeds them into `TRMRouter`, persists results. Idle cycle exit (MAX_IDLE=10). Runs alongside mock capture and preprocessing scripts.
+- `RoutingRecord.to_orm()` on contracts model — same `to_orm()` pattern as `TransmissionPacket`.
+
 ### Tests (`tests/`)
 
-- 31 tests total, all mocked (no API key needed)
+- 36 tests total, all mocked (no API key needed)
 - Contracts tests (5): import validation, TransmissionPacket construction, ReadyPacket alias, RoutingRecord string decisions, datetime parsing
 - Mock pipeline tests (3): capture writes, preprocessing updates, DB reset
 - Scenario endpoint tests (9): list, sort order, detail content, structure, 404 handling
 - Run/WebSocket tests (7): run creation, validation, full WebSocket integration (verifies message ordering, backlog delivery, end-to-end flow with mocked LLM)
 - Database model tests (7): imports, table creation, CRUD for all 5 models
+- TRM persistence tests (5): RoutingRecord.to_orm(), new thread+event, existing thread upsert, buffer decision, none event
 
 ---
 
@@ -85,6 +92,7 @@ albatross/
 │   ├── models.py             # Transmission, Thread, Event, ThreadEvent, RoutingRecord
 │   ├── session.py            # Async engine, session factory, get_session dependency
 │   ├── reset.py              # Truncates all data tables in FK-safe order
+│   ├── persist.py            # persist_routing_result() — atomic TRM persistence
 │   └── migrations/
 │       ├── env.py            # Async Alembic config
 │       └── versions/         # Migration scripts
@@ -96,18 +104,23 @@ albatross/
 │       └── scenario_04_three_way_split/
 ├── docs/
 │   ├── albatross.md
+│   ├── albatross_phase_3.md
+│   ├── albatross_runtime_loop.md
+│   ├── db-datapipeline.md
 │   ├── trm_spec.md
 │   ├── trm_runtime_loop.md
-│   ├── albatross_runtime_loop.md
+│   ├── trm_outline.md
 │   ├── webui-api.md
 │   ├── ui_spec.md
-│   ├── ui_mockup.jsx
-│   └── trm_outline.md
+│   └── ui_mockup.jsx
 ├── tests/
 │   ├── conftest.py           # Shared fixtures (async test client, DB engine/session)
+│   ├── test_contracts.py     # Contracts layer tests (5)
+│   ├── test_mock_pipeline.py # Mock capture/preprocessing/reset tests (3)
 │   ├── test_scenarios.py     # Scenario endpoint tests (9)
 │   ├── test_runs.py          # Run + WebSocket tests (7)
-│   └── test_db.py            # Database model tests (7)
+│   ├── test_db.py            # Database model tests (7)
+│   └── test_trm_persistence.py # TRM persistence tests (5)
 ├── dev.sh                        # Launch API + frontend together
 ├── web/
 │   ├── src/
@@ -150,9 +163,10 @@ albatross/
 │   └── ...
 └── src/
     ├── main.py
+    ├── main_live.py          # DB-driven TRM entry point (polls for processed rows)
     ├── models/
-    │   ├── packets.py        # ProcessedPacket, ReadyPacket
-    │   └── router.py         # Thread, Event, RoutingRecord, TRMContext, decision enums
+    │   ├── packets.py        # Re-exports ProcessedPacket, ReadyPacket from contracts
+    │   └── router.py         # Thread, Event, TRMContext, decision enums (imports RoutingRecord from contracts)
     └── pipeline/
         ├── loader.py         # PacketLoader
         ├── queue.py          # PacketQueue
@@ -192,9 +206,8 @@ albatross/
 
 ## What's Next
 
-Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), and 3.2b (mock pipeline + DB reset) are complete. Remaining:
+Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), 3.2b (mock pipeline + DB reset), and 3.3 (TRM persistence layer) are complete. Remaining:
 
-1. **Sub-phase 3.3** — TRM persistence layer + `main_live.py` DB-driven entry point
-2. **Sub-phase 3.4** — UI hydration from database + live WebSocket updates
+1. **Sub-phase 3.4** — UI hydration from database + live WebSocket updates
 
 Future (post Phase 3): Scorer, prompt iteration, real ASR integration

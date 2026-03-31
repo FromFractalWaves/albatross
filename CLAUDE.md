@@ -16,7 +16,7 @@ Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for 
 
 **Phase 3 — Database & Inter-Module Data Pipeline.** See `docs/albatross_phase_3.md` for the plan and `docs/db-datapipeline.md` for implementation specs.
 
-Phases 1 (TRM core) and 2 (Web UI + API) are complete. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), and 3.2b (mock pipeline + DB reset) are complete. The `db/` package has 5 ORM models, Alembic migrations, async session factory, and a reset script. The `contracts/` package has 4 boundary types with `to_orm()` mapping to ORM models. Mock capture (`capture/mock/run.py`) and preprocessing (`preprocessing/mock/run.py`) scripts simulate the full pipeline. Next up: sub-phase 3.3 (TRM persistence layer).
+Phases 1 (TRM core) and 2 (Web UI + API) are complete. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), 3.2b (mock pipeline + DB reset), and 3.3 (TRM persistence layer) are complete. The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has 4 boundary types with `to_orm()` mapping to ORM models. Mock capture (`capture/mock/run.py`) and preprocessing (`preprocessing/mock/run.py`) scripts simulate the full pipeline. `src/main_live.py` is the DB-driven TRM entry point — polls for processed rows and persists routing results. Next up: sub-phase 3.4 (UI hydration from database).
 
 The existing scenario tooling (`data/`, `api/`, `src/`, `web/`) is **not being replaced** — it continues to work as-is for development and tuning. Phase 3 adds new modules alongside it.
 
@@ -49,6 +49,15 @@ cd web && npm run dev
 ./dev.sh
 ```
 
+```bash
+# Run the full mock pipeline (capture + preprocessing + TRM against DB)
+alembic upgrade head              # ensure schema exists
+python db/reset.py                # clear all tables
+python preprocessing/mock/run.py & # start preprocessing (polls for captured rows)
+python capture/mock/run.py &      # start capture (writes packets to DB every 10s)
+python src/main_live.py           # start TRM (polls for processed rows, routes + persists)
+```
+
 The CLI entry point is `src/main.py`. The API entry point is `api/main.py` (FastAPI). Both require the venv activated and `.env` with `ANTHROPIC_API_KEY` for live runs. The frontend dev server runs on `localhost:3000` and talks to the API on `localhost:8000`.
 
 ## Architecture
@@ -57,7 +66,7 @@ The CLI entry point is `src/main.py`. The API entry point is `api/main.py` (Fast
 
 Shared Pydantic types for cross-module boundaries. All modules import boundary types from `contracts/`, not from each other.
 
-- **`contracts/models.py`** — `TransmissionPacket` (capture output, with `to_orm()` method), `ProcessedPacket` (TRM input, domain-agnostic), `ReadyPacket` (alias for `ProcessedPacket`), `RoutingRecord` (TRM output, plain string decision fields).
+- **`contracts/models.py`** — `TransmissionPacket` (capture output, with `to_orm()` method), `ProcessedPacket` (TRM input, domain-agnostic), `ReadyPacket` (alias for `ProcessedPacket`), `RoutingRecord` (TRM output, plain string decision fields, with `to_orm()` method).
 
 ### Mock Pipeline (`capture/`, `preprocessing/`)
 
@@ -75,6 +84,8 @@ The pipeline has three stages wired together with asyncio:
 2. **PacketQueue** (`src/pipeline/queue.py`) — thin `asyncio.Queue` wrapper.
 3. **TRMRouter** (`src/pipeline/router.py`) — the core. On each packet it serializes the full `TRMContext` (all active threads, events, buffered packets, and the incoming packet) as JSON, sends it to Claude Sonnet with a system prompt, parses the JSON response into a `RoutingRecord`, and updates internal state via `_apply()`.
 
+Two entry points: `src/main.py` (scenario mode — reads from flat files, in-memory only) and `src/main_live.py` (DB mode — polls for `processed` rows, routes, persists via `db/persist.py`). Scenario tooling is unaffected by the DB path.
+
 ### Models (`src/models/`)
 
 - **`packets.py`**: Re-exports `ProcessedPacket` and `ReadyPacket` from `contracts.models`.
@@ -87,6 +98,7 @@ SQLAlchemy 2.0 async ORM with Alembic migrations. Dev engine is SQLite via `aios
 - **`db/base.py`** — `DeclarativeBase` subclass.
 - **`db/models.py`** — 5 ORM models: `Transmission`, `Thread`, `Event`, `ThreadEvent`, `RoutingRecord`.
 - **`db/session.py`** — Async engine from `DATABASE_URL` env var (default `sqlite+aiosqlite:///./albatross.db`), `AsyncSessionLocal` factory, `get_session` dependency.
+- **`db/persist.py`** — `persist_routing_result()`: atomic per-packet persistence. Upserts thread/event/join, writes routing record, updates transmission to `routed`. Called by `src/main_live.py` after each `router.route()` call.
 - **`db/migrations/`** — Alembic migrations. `env.py` configured for async with `render_as_batch=True` for SQLite.
 
 ### API (`api/`)
@@ -112,7 +124,7 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 31 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), and database models (7 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 36 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), and TRM persistence (5 tests).
 
 ### Key Design Decisions
 

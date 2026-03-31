@@ -16,7 +16,7 @@ Albatross is being built in phases. Each phase is documented separately.
 |-------|-------------|--------|---------------|
 | **Phase 1** — TRM Core | Async packet pipeline, LLM-backed thread and event router, Tier 1 scenario dataset | Complete | `docs/trm_spec.md`, `docs/trm_runtime_loop.md` |
 | **Phase 2** — Web UI & API | FastAPI backend, WebSocket streaming, Next.js dashboard with live run visualization | Complete | `docs/webui-api.md` |
-| **Phase 3** — Database & Data Pipeline | Shared DB, contracts layer, mock pipeline, UI hydration from DB | In progress (3.1 complete) | `docs/albatross_phase_3.md`, `docs/db-datapipeline.md` |
+| **Phase 3** — Database & Data Pipeline | Shared DB, contracts layer, mock pipeline, UI hydration from DB | In progress (3.1, 3.2, 3.2b, 3.3 complete) | `docs/albatross_phase_3.md`, `docs/db-datapipeline.md` |
 
 > **Note on document naming:** Some documents in `docs/` use naming conventions from earlier in the project when scope was narrower. `docs/albatross_runtime_loop.md` is the architectural spec for the full radio pipeline and database design — it is the primary reference for Phase 3 despite its name. The phase numbering inside `docs/webui-api.md` (phases 1–6) refers to sub-phases of the web build, not Albatross-level phases.
 
@@ -43,7 +43,7 @@ Albatross is being built in phases. Each phase is documented separately.
 
 Phase 1 and Phase 2 are complete. The TRM pipeline runs against four Tier 1 scenarios. The FastAPI backend serves scenario data and streams live runs over WebSocket. The Next.js frontend renders a live dashboard — thread lanes, events view, chronological timeline, decision badges.
 
-Phase 3 is in progress. Sub-phase 3.1 (DB schema + ORM) is complete — SQLAlchemy 2.0 async models with Alembic migrations are in place. Runs are still in-memory — the remaining sub-phases wire up the mock pipeline, TRM persistence, and UI hydration from the database.
+Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), 3.2b (mock pipeline + DB reset), and 3.3 (TRM persistence layer) are complete. SQLAlchemy 2.0 async models with Alembic migrations, shared Pydantic boundary types in `contracts/`, mock capture/preprocessing scripts, and DB-driven TRM routing (`src/main_live.py`) are in place. The remaining sub-phase wires up UI hydration from the database.
 
 ---
 
@@ -62,6 +62,14 @@ cd web && npm run dev
 **Database migrations:**
 ```bash
 alembic upgrade head
+```
+
+**Mock pipeline (capture + preprocessing + TRM):**
+```bash
+python db/reset.py                  # clear all tables
+python preprocessing/mock/run.py &  # start preprocessing (polls for captured rows)
+python capture/mock/run.py &        # start capture (writes packets to DB)
+python src/main_live.py             # start TRM (polls for processed rows, routes + persists)
 ```
 
 **Tests:**

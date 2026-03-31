@@ -109,7 +109,7 @@ When this is working end to end, a page refresh shows the current state. The arc
 
 Detailed implementation specs for each step live in `docs/db-datapipeline.md` as they are written. This section defines the steps and their completion criteria.
 
-### Step 1 — Database schema + ORM setup
+### Step 1 — Database schema + ORM setup ✓
 
 Stand up the database. Define all models. Verify migrations work. Nothing else runs until this exists.
 
@@ -122,7 +122,7 @@ The schema is already designed in `docs/albatross_runtime_loop.md`. The tables a
 
 Engine: SQLite for local dev, PostgreSQL for production. The ORM should abstract this. ORM decision (SQLAlchemy, Tortoise, raw asyncpg) to be made at implementation time.
 
-**Done when:** Schema exists, migrations run cleanly, models are importable from `db/`.
+**Done.** SQLAlchemy 2.0 async ORM with Alembic migrations. 5 models in `db/models.py`, async session factory in `db/session.py`.
 
 ---
 
@@ -139,7 +139,7 @@ Define the shared types in `contracts/` that all modules import. These are the b
 
 ---
 
-### Step 3 — Augment a Tier 1 scenario with radio metadata
+### Step 3 — Augment a Tier 1 scenario with radio metadata ✓
 
 Take `scenario_02_interleaved`. Add radio-style metadata to each packet:
 
@@ -161,7 +161,7 @@ Take `scenario_02_interleaved`. Add radio-style metadata to each packet:
 
 This becomes the seed data for the mock pipeline. It looks like real radio data. The TRM treats the metadata as routing signals, same as it would in production.
 
-**Done when:** Augmented `packets.json` exists. Text content is unchanged — only metadata is added.
+**Done.** `data/tier_one/scenario_02_interleaved/packets_radio.json` — 12 packets, two interleaved conversations, TGID 1001 (bob/dylan) and TGID 1002 (sam/jose).
 
 ---
 
@@ -187,7 +187,7 @@ The text already exists in the augmented dataset — mock preprocessing just cop
 
 ---
 
-### Step 6 — TRM persistence layer
+### Step 6 — TRM persistence layer ✓
 
 Extend the existing TRM to write to the database after each routing decision. The in-memory state update logic in `_apply()` does not change — a persistence layer wraps it.
 
@@ -202,7 +202,7 @@ After each packet is routed:
 
 The TRM also needs a DB-driven entry point — polling for `processed` records rather than consuming from `PacketLoader`. Scenario tooling is unaffected; it continues to use `PacketLoader` and in-memory state. The DB-driven path is a separate entry point.
 
-**Done when:** A packet that enters as `status = 'processed'` emerges as `status = 'routed'`, with routing records, thread, and event rows written to the database. In-memory and DB state match after every packet.
+**Done.** `db/persist.py` provides `persist_routing_result()` — atomic per-packet persistence within a single transaction (upsert thread, upsert event, upsert join, write routing record, update transmission to `routed`). `RoutingRecord.to_orm()` added to contracts, same pattern as `TransmissionPacket.to_orm()`. `src/main_live.py` is the DB-driven entry point — polls for `processed` rows, feeds them into `TRMRouter`, persists results. 5 new tests cover the persistence layer.
 
 ---
 
