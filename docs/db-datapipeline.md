@@ -156,7 +156,7 @@ alembic upgrade head
 
 ---
 
-## Sub-phase 3.2 — Contracts Layer
+## Sub-phase 3.2 — Contracts Layer ✓
 
 ### Purpose
 
@@ -194,12 +194,13 @@ contracts/
 # contracts/models.py
 
 from pydantic import BaseModel
+from datetime import datetime
 from typing import Any, Optional
 
 class TransmissionPacket(BaseModel):
     """Output of the capture stage. Input to preprocessing."""
     id: str
-    timestamp: str
+    timestamp: str  # ISO8601 — capture doesn't need datetime arithmetic
     talkgroup_id: int
     source_unit: Optional[int] = None
     frequency: float
@@ -211,7 +212,7 @@ class TransmissionPacket(BaseModel):
 class ProcessedPacket(BaseModel):
     """Output of preprocessing. Input to the TRM. Domain-agnostic."""
     id: str
-    timestamp: str
+    timestamp: datetime  # Pydantic parses ISO8601 strings automatically
     text: str
     metadata: dict[str, Any] = {}
 
@@ -239,10 +240,10 @@ Changes are mechanical — find/replace imports, verify tests still pass.
 
 ### Done When
 
-- `contracts/models.py` exists and is importable
-- `src/models/packets.py` reconciled — `ProcessedPacket` and `ReadyPacket` definitions match contracts
-- No file imports boundary types from `src/models/` directly
-- All 23 tests still pass
+- `contracts/models.py` exists and is importable ✓
+- `src/models/packets.py` reconciled — re-exports from contracts ✓
+- No file imports boundary types from `src/models/` directly ✓
+- All tests pass (28 total: 23 existing + 5 new contracts tests) ✓
 
 ---
 

@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 
-from src.models.packets import ReadyPacket
-from src.models.router import RoutingRecord, ThreadDecision, EventDecision, TRMContext
+from contracts.models import ReadyPacket, RoutingRecord
+from src.models.router import TRMContext
 
 
 def _make_mock_router():
@@ -36,9 +36,9 @@ def _make_mock_router():
 
         record = RoutingRecord(
             packet_id=packet.id,
-            thread_decision=ThreadDecision.NEW if is_first_in_thread else ThreadDecision.EXISTING,
+            thread_decision="new" if is_first_in_thread else "existing",
             thread_id=thread_id,
-            event_decision=EventDecision.NONE,
+            event_decision="none",
             event_id=None,
         )
         router.routing_records.append(record)

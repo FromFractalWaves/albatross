@@ -16,7 +16,7 @@ Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for 
 
 **Phase 3 — Database & Inter-Module Data Pipeline.** See `docs/albatross_phase_3.md` for the plan and `docs/db-datapipeline.md` for implementation specs.
 
-Phases 1 (TRM core) and 2 (Web UI + API) are complete. Sub-phase 3.1 (DB schema + ORM) is complete — the `db/` package with 5 ORM models, Alembic migrations, and async session factory is in place. Next up: sub-phase 3.2 (contracts layer).
+Phases 1 (TRM core) and 2 (Web UI + API) are complete. Sub-phases 3.1 (DB schema + ORM) and 3.2 (contracts layer) are complete. The `db/` package has 5 ORM models, Alembic migrations, and async session factory. The `contracts/` package has 4 boundary types (`TransmissionPacket`, `ProcessedPacket`, `ReadyPacket`, `RoutingRecord`) that all modules import from. Next up: sub-phase 3.2b (mock capture + preprocessing scripts).
 
 The existing scenario tooling (`data/`, `api/`, `src/`, `web/`) is **not being replaced** — it continues to work as-is for development and tuning. Phase 3 adds new modules alongside it.
 
@@ -53,6 +53,12 @@ The CLI entry point is `src/main.py`. The API entry point is `api/main.py` (Fast
 
 ## Architecture
 
+### Contracts (`contracts/`)
+
+Shared Pydantic types for cross-module boundaries. All modules import boundary types from `contracts/`, not from each other.
+
+- **`contracts/models.py`** — `TransmissionPacket` (capture output), `ProcessedPacket` (TRM input, domain-agnostic), `ReadyPacket` (alias for `ProcessedPacket`), `RoutingRecord` (TRM output, plain string decision fields).
+
 ### TRM Pipeline (`src/`)
 
 The pipeline has three stages wired together with asyncio:
@@ -63,8 +69,8 @@ The pipeline has three stages wired together with asyncio:
 
 ### Models (`src/models/`)
 
-- **`packets.py`**: `ProcessedPacket` (id, timestamp, text, metadata dict) and `ReadyPacket` (alias).
-- **`router.py`**: `ThreadDecision`/`EventDecision` enums, `Thread`, `Event`, `RoutingRecord`, `TRMContext`. All Pydantic models — context is serialized with `model_dump(mode="json")`.
+- **`packets.py`**: Re-exports `ProcessedPacket` and `ReadyPacket` from `contracts.models`.
+- **`router.py`**: TRM-internal types — `ThreadDecision`/`EventDecision` enums, `Thread`, `Event`, `TRMContext`. Imports `RoutingRecord` from `contracts.models`. All Pydantic models — context is serialized with `model_dump(mode="json")`.
 
 ### Database (`db/`)
 
@@ -98,7 +104,7 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 23 tests total: scenario endpoints (9 tests), run/WebSocket flow (7 tests), and database models (7 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 28 tests total: contracts layer (5 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), and database models (7 tests).
 
 ### Key Design Decisions
 

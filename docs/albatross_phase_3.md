@@ -126,17 +126,16 @@ Engine: SQLite for local dev, PostgreSQL for production. The ORM should abstract
 
 ---
 
-### Step 2 — Contracts layer
+### Step 2 — Contracts layer ✓
 
 Define the shared types in `contracts/` that all modules import. These are the boundary contracts — the shapes that must be honored at each stage handoff.
 
 - `TransmissionPacket` — base capture output
 - `ProcessedPacket` — TRM input (domain-agnostic)
+- `ReadyPacket` — alias for ProcessedPacket
 - `RoutingRecord` — TRM output
 
-The existing Pydantic models in `src/models/` are the reference. This step is mostly moving and clarifying, not inventing.
-
-**Done when:** `contracts/models.py` exists, existing TRM models are reconciled against it, no module imports types from another module directly.
+**Done.** `contracts/models.py` exists with all four boundary types. All modules import from `contracts/`, not from each other. `src/models/packets.py` re-exports from contracts. `RoutingRecord` uses plain strings for decision fields (enums stay TRM-internal). 28 tests pass.
 
 ---
 

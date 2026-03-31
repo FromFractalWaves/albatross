@@ -1,14 +1,3 @@
-from pydantic import BaseModel
-from datetime import datetime
-from typing import Any
+from contracts.models import ProcessedPacket, ReadyPacket
 
-class ProcessedPacket(BaseModel):
-    id: str
-    timestamp: datetime
-    text: str
-    metadata: dict[str, Any]
-
-class ReadyPacket(ProcessedPacket):
-    pass
-
-
+__all__ = ["ProcessedPacket", "ReadyPacket"]

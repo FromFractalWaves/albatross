@@ -3,7 +3,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from src.models.packets import ReadyPacket
+from contracts.models import ReadyPacket
 from src.pipeline.queue import PacketQueue
 
 logger = logging.getLogger(__name__)

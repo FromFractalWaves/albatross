@@ -1,6 +1,12 @@
 from enum import Enum
 from pydantic import BaseModel, Field
-from src.models.packets import ReadyPacket
+from contracts.models import ReadyPacket, RoutingRecord
+
+__all__ = [
+    "ThreadDecision", "EventDecision",
+    "Thread", "Event", "RoutingRecord",
+    "TRMContext",
+]
 
 
 class ThreadDecision(str, Enum):
@@ -31,14 +37,6 @@ class Event(BaseModel):
     opened_at: str
     thread_ids: list[str] = Field(default_factory=list)
     status: str = "open"
-
-
-class RoutingRecord(BaseModel):
-    packet_id: str
-    thread_decision: ThreadDecision
-    thread_id: str | None = None
-    event_decision: EventDecision
-    event_id: str | None = None
 
 
 class TRMContext(BaseModel):

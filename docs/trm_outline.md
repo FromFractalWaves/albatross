@@ -33,6 +33,15 @@
 - Scenario detail page (`scenarios/[tier]/[scenario]/page.tsx`) — renders README, packet list, expected output (collapsible), run config (speed factor, buffer count), launches run and redirects to `/run/{runId}`
 - Live run page (`run/[runId]/page.tsx`) — visual dashboard with three tabs: LIVE (thread lanes with color-coded packets), EVENTS (event cards with thread links), TIMELINE (chronological packet list). Incoming packet banner with pulsing LLM indicator, buffer zone for deferred packets, decision badges, top bar with status/stats, collapsible context inspector
 
+### Contracts (`contracts/`)
+
+- Shared Pydantic types for cross-module boundaries — the single source of truth for types that cross pipeline stage boundaries
+- `TransmissionPacket` — capture output, preprocessing input (radio-specific)
+- `ProcessedPacket` — preprocessing output, TRM input (domain-agnostic)
+- `ReadyPacket` — type alias for `ProcessedPacket` (naming convention for pipeline position)
+- `RoutingRecord` — TRM output, one per routed packet (plain string decision fields)
+- All modules import boundary types from `contracts/`, not from each other
+
 ### Database (`db/`)
 
 - SQLAlchemy 2.0 async ORM with Alembic migrations
@@ -42,7 +51,8 @@
 
 ### Tests (`tests/`)
 
-- 23 tests total, all mocked (no API key needed)
+- 28 tests total, all mocked (no API key needed)
+- Contracts tests (5): import validation, TransmissionPacket construction, ReadyPacket alias, RoutingRecord string decisions, datetime parsing
 - Scenario endpoint tests (9): list, sort order, detail content, structure, 404 handling
 - Run/WebSocket tests (7): run creation, validation, full WebSocket integration (verifies message ordering, backlog delivery, end-to-end flow with mocked LLM)
 - Database model tests (7): imports, table creation, CRUD for all 5 models
@@ -53,6 +63,9 @@
 
 ```
 albatross/
+├── contracts/
+│   ├── __init__.py
+│   └── models.py            # Boundary types: TransmissionPacket, ProcessedPacket, ReadyPacket, RoutingRecord
 ├── api/
 │   ├── main.py               # FastAPI app, CORS, RunManager setup
 │   ├── routes/
@@ -171,11 +184,10 @@ albatross/
 
 ## What's Next
 
-Phase 3 is in progress. Sub-phase 3.1 (DB schema + ORM) is complete. Remaining:
+Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM) and 3.2 (contracts layer) are complete. Remaining:
 
-1. **Sub-phase 3.2** — Contracts layer (`contracts/models.py`) — shared Pydantic types for cross-module boundaries
-2. **Sub-phase 3.2b** — Mock capture + preprocessing scripts, DB reset utility
-3. **Sub-phase 3.3** — TRM persistence layer + `main_live.py` DB-driven entry point
-4. **Sub-phase 3.4** — UI hydration from database + live WebSocket updates
+1. **Sub-phase 3.2b** — Mock capture + preprocessing scripts, DB reset utility
+2. **Sub-phase 3.3** — TRM persistence layer + `main_live.py` DB-driven entry point
+3. **Sub-phase 3.4** — UI hydration from database + live WebSocket updates
 
 Future (post Phase 3): Scorer, prompt iteration, real ASR integration

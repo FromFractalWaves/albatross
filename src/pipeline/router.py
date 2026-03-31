@@ -2,11 +2,10 @@ import json
 import logging
 import anthropic
 
-from src.models.packets import ReadyPacket
+from contracts.models import ReadyPacket, RoutingRecord
 from src.models.router import (
     Thread,
     Event,
-    RoutingRecord,
     TRMContext,
     ThreadDecision,
     EventDecision,
@@ -114,21 +113,21 @@ class TRMRouter:
         self._apply(packet, record, data)
 
         self.routing_records.append(record)
-        logger.info(f"{packet.id} → thread={record.thread_decision.value}:{record.thread_id} event={record.event_decision.value}:{record.event_id}")
+        logger.info(f"{packet.id} → thread={record.thread_decision}:{record.thread_id} event={record.event_decision}:{record.event_id}")
 
         return record
 
     def _parse_record(self, data: dict) -> RoutingRecord:
         return RoutingRecord(
             packet_id=data["packet_id"],
-            thread_decision=ThreadDecision(data["thread_decision"]),
+            thread_decision=data["thread_decision"],
             thread_id=data.get("thread_id"),
-            event_decision=EventDecision(data["event_decision"]),
+            event_decision=data["event_decision"],
             event_id=data.get("event_id"),
         )
 
     def _apply(self, packet: ReadyPacket, record: RoutingRecord, data: dict) -> None:
-        if record.thread_decision == ThreadDecision.NEW:
+        if record.thread_decision == "new":
             thread = Thread(
                 thread_id=record.thread_id,
                 label=data.get("thread_label", ""),
@@ -136,21 +135,21 @@ class TRMRouter:
             )
             self.context.active_threads.append(thread)
 
-        elif record.thread_decision == ThreadDecision.EXISTING:
+        elif record.thread_decision == "existing":
             thread = self._get_thread(record.thread_id)
             if thread:
                 thread.packets.append(packet)
                 if data.get("thread_label"):
                     thread.label = data["thread_label"]
 
-        elif record.thread_decision == ThreadDecision.BUFFER:
+        elif record.thread_decision == "buffer":
             if self.context.buffers_remaining > 0:
                 self.context.packets_to_resolve.append(packet)
                 self.context.buffers_remaining -= 1
             else:
                 logger.warning(f"Buffer exhausted — marking {packet.id} as unknown")
 
-        if record.event_decision == EventDecision.NEW:
+        if record.event_decision == "new":
             event = Event(
                 event_id=record.event_id,
                 label=data.get("event_label", ""),
@@ -162,7 +161,7 @@ class TRMRouter:
             if thread and record.event_id not in thread.event_ids:
                 thread.event_ids.append(record.event_id)
 
-        elif record.event_decision == EventDecision.EXISTING:
+        elif record.event_decision == "existing":
             event = self._get_event(record.event_id)
             if event and record.thread_id and record.thread_id not in event.thread_ids:
                 event.thread_ids.append(record.thread_id)

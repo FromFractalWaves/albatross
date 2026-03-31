@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
-from src.models.packets import ReadyPacket
+from contracts.models import ReadyPacket
 from src.pipeline.loader import PacketLoader
 from src.pipeline.queue import PacketQueue
 from src.pipeline.router import TRMRouter
