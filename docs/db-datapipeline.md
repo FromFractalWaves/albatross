@@ -4,41 +4,232 @@
 
 ---
 
-## Sub-phase 3.2 — Synthetic Live Data & Mock Pipeline
+## Sub-phase 3.1 — Database Schema + ORM Setup
+
+### Stack
+
+- **ORM:** SQLAlchemy 2.0 async (`sqlalchemy[asyncio]`)
+- **Dev engine:** SQLite via `aiosqlite`
+- **Prod engine:** PostgreSQL via `asyncpg`
+- **Migrations:** Alembic
+- **Config:** engine URL from environment variable `DATABASE_URL`, defaulting to `sqlite+aiosqlite:///./albatross.db` for local dev
+
+### File Structure
+
+```
+db/
+├── __init__.py
+├── base.py          # DeclarativeBase, metadata
+├── models.py        # All ORM models
+├── session.py       # Engine setup, AsyncSession factory, get_session dependency
+└── migrations/
+    ├── env.py
+    ├── script.py.mako
+    └── versions/
+```
+
+### Models
+
+All models use `mapped_column` and `Mapped` (SQLAlchemy 2.0 style). Timestamps use `func.now()` server defaults.
+
+#### Transmission
+
+```python
+class Transmission(Base):
+    __tablename__ = "transmissions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # packet id, e.g. "pkt_001"
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    # 'captured' | 'processing' | 'processed' | 'routing' | 'routed' | 'error'
+
+    # Capture fields
+    talkgroup_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_unit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    frequency: Mapped[float] = mapped_column(Float, nullable=False)
+    duration: Mapped[float] = mapped_column(Float, nullable=False)
+    encryption_status: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    audio_path: Mapped[str] = mapped_column(String, nullable=False)
+
+    # Preprocessing fields
+    text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    asr_model: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    asr_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    asr_passes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # TRM fields
+    thread_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey("threads.id"), nullable=True)
+    event_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey("events.id"), nullable=True)
+    thread_decision: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    event_decision: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+```
+
+#### Thread
+
+```python
+class Thread(Base):
+    __tablename__ = "threads"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # e.g. "thread_A"
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="open")
+    # 'open' | 'closed'
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+```
+
+#### Event
+
+```python
+class Event(Base):
+    __tablename__ = "events"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # e.g. "event_A"
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="open")
+    # 'open' | 'closed'
+    opened_at: Mapped[Optional[str]] = mapped_column(String, ForeignKey("transmissions.id"), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+```
+
+#### ThreadEvent (join table)
+
+```python
+class ThreadEvent(Base):
+    __tablename__ = "thread_events"
+
+    thread_id: Mapped[str] = mapped_column(String, ForeignKey("threads.id"), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String, ForeignKey("events.id"), primary_key=True)
+```
+
+#### RoutingRecord
+
+```python
+class RoutingRecord(Base):
+    __tablename__ = "routing_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    packet_id: Mapped[str] = mapped_column(String, ForeignKey("transmissions.id"), nullable=False)
+    thread_decision: Mapped[str] = mapped_column(String, nullable=False)
+    thread_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey("threads.id"), nullable=True)
+    event_decision: Mapped[str] = mapped_column(String, nullable=False)
+    event_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey("events.id"), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+```
+
+### Session Setup
+
+```python
+# db/session.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./albatross.db")
+
+engine = create_async_engine(DATABASE_URL, echo=False)
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+async def get_session() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session
+```
+
+### Migrations
+
+Alembic is configured to use the async engine. `alembic init db/migrations` then configure `env.py` to import `Base.metadata` from `db/base.py`.
+
+```bash
+# Create initial migration
+alembic revision --autogenerate -m "initial schema"
+
+# Apply
+alembic upgrade head
+```
+
+### Done When
+
+- `alembic upgrade head` runs cleanly against SQLite
+- All five models are importable from `db/models.py`
+- A simple script can open a session, insert a `Transmission`, and query it back
+
+---
+
+## Sub-phase 3.2 — Contracts Layer
+
+### Purpose
+
+A single source of truth for the Pydantic types that cross module boundaries. Every module imports from `contracts/`, not from each other.
+
+### File Structure
+
+```
+contracts/
+├── __init__.py
+└── models.py
+```
+
+### Models
+
+These are largely already defined in `src/models/`. The contracts layer moves and clarifies them — it is not a rewrite.
+
+```python
+# contracts/models.py
+
+from pydantic import BaseModel
+from typing import Any, Optional
+
+class TransmissionPacket(BaseModel):
+    """Output of the capture stage. Input to preprocessing."""
+    id: str
+    timestamp: str
+    talkgroup_id: int
+    source_unit: Optional[int] = None
+    frequency: float
+    duration: float
+    encryption_status: bool
+    audio_path: str
+    metadata: dict[str, Any] = {}
+
+class ProcessedPacket(BaseModel):
+    """Output of preprocessing. Input to the TRM. Domain-agnostic."""
+    id: str
+    timestamp: str
+    text: str
+    metadata: dict[str, Any] = {}
+
+# ReadyPacket is a positional alias — a ProcessedPacket dequeued by the TRM
+ReadyPacket = ProcessedPacket
+
+class RoutingRecord(BaseModel):
+    """Output of the TRM. One per packet."""
+    packet_id: str
+    thread_decision: str   # 'new' | 'existing' | 'buffer' | 'unknown'
+    thread_id: Optional[str] = None
+    event_decision: str    # 'new' | 'existing' | 'none' | 'unknown'
+    event_id: Optional[str] = None
+```
+
+### Done When
+
+- `contracts/models.py` exists and is importable
+- `src/models/packets.py` and `src/models/router.py` are reconciled against these definitions (no conflicting shapes)
+- Nothing imports packet or routing types from `src/` directly — they come from `contracts/`
+
+---
+
+## Sub-phase 3.2b — Synthetic Live Data & Mock Pipeline
 
 ### Source Dataset
 
-Base: `data/tier_one/scenario_02_interleaved/packets.json`
-
-This scenario has 12 packets across two interleaved conversations — enough to produce two threads and at least one event, which exercises the full routing surface. The text content stays unchanged. Radio metadata is added to each packet.
-
-### Augmented Packet Shape
-
-Each packet in the augmented dataset gets a `metadata` block that mirrors what real capture would produce:
-
-```json
-{
-  "id": "uuid-here",
-  "timestamp": "2024-01-15T14:23:01Z",
-  "text": "Hey, did you get the memo about the new shift schedule?",
-  "metadata": {
-    "talkgroup_id": 1001,
-    "source_unit": 4021,
-    "frequency": 851.0125,
-    "duration": 3.2,
-    "encryption_status": false,
-    "audio_path": "out/wav/mock_001.wav"
-  }
-}
-```
-
-Use two talkgroup IDs to reflect the two interleaved conversations — e.g. TGID `1001` for thread A speakers, TGID `1002` for thread B speakers. This gives the TRM a real metadata signal to work with alongside the text.
-
-Augmented dataset lives at: `data/tier_one/scenario_02_interleaved/packets_radio.json`
-
-The original `packets.json` is untouched. The augmented file is the mock pipeline's input.
-
----
+`data/tier_one/scenario_02_interleaved/packets_radio.json` — already created. 12 packets, two interleaved conversations, TGID 1001 (bob/dylan) and TGID 1002 (sam/jose).
 
 ### Simulation Parameters
 
@@ -48,11 +239,7 @@ The original `packets.json` is untouched. The augmented file is the mock pipelin
 | Mock ASR delay | 10 seconds |
 | Loop | No — run through dataset once and stop |
 
-**What this means in practice:** With 12 packets at 10 second intervals, the full capture phase takes ~2 minutes. Each packet then waits 10 seconds in preprocessing before the TRM picks it up. The TRM processes packets sequentially as they become available. Total wall time from first capture to last routed packet: roughly 4 minutes.
-
-This is slow enough to watch the pipeline progress in real time in the UI without being painful to sit through during development.
-
----
+Total wall time: ~4 minutes from first capture to last routed packet.
 
 ### Mock Capture Script
 
@@ -61,46 +248,40 @@ Location: `capture/mock/run.py`
 **Behavior:**
 1. Reads `packets_radio.json`
 2. For each packet, writes a row to `transmissions` with `status = 'captured'`
-   - All capture fields populated from the packet metadata
-   - `text` field left null — preprocessing hasn't run yet
+   - All capture fields populated from packet metadata
+   - `text` left null — preprocessing hasn't run yet
 3. Waits 10 seconds
 4. Moves to the next packet
 5. Exits after the last packet
 
-**Invocation:**
 ```bash
 python capture/mock/run.py
 ```
-
----
 
 ### Mock Preprocessing Script
 
 Location: `preprocessing/mock/run.py`
 
 **Behavior:**
-1. Polls `transmissions` for rows with `status = 'captured'` every 2 seconds
-2. On finding one, flips status to `'processing'` immediately (prevents double-pickup)
-3. Waits 10 seconds (simulated ASR time)
+1. Polls `transmissions` for `status = 'captured'` rows every 2 seconds
+2. Flips status to `'processing'` immediately on pickup (prevents double-pickup)
+3. Waits 10 seconds (simulated ASR)
 4. Writes `text` from the source packet into the `transmissions` row
-5. Writes mock ASR metadata: `asr_model = 'mock'`, `asr_confidence = 1.0`, `asr_passes = 1`
+5. Sets `asr_model = 'mock'`, `asr_confidence = 1.0`, `asr_passes = 1`
 6. Flips status to `'processed'`
 7. Continues polling until no `captured` or `processing` records remain, then exits
 
-**Invocation:**
 ```bash
 python preprocessing/mock/run.py
 ```
 
-Both scripts are designed to run concurrently in separate terminals — capture is writing, preprocessing is picking up behind it.
-
----
+Both scripts run concurrently in separate terminals.
 
 ### DB Reset
 
-A clean reset truncates all data tables without touching the schema. Foreign key order matters.
-
 Location: `db/reset.py`
+
+Truncates all data tables in FK-safe order. Does not drop or recreate schema.
 
 **Truncation order:**
 1. `routing_records`
@@ -109,32 +290,136 @@ Location: `db/reset.py`
 4. `threads`
 5. `events`
 
-**Invocation:**
+Prints confirmation before truncating.
+
 ```bash
 python db/reset.py
 ```
-
-Prints a confirmation before truncating. Does not drop or recreate any tables. Safe to run between simulation runs during development.
 
 ---
 
-### Running a Full Simulation
+## Sub-phase 3.3 — TRM Persistence Layer
 
-```bash
-# 1. Reset the database
-python db/reset.py
+### What Changes
 
-# 2. Start mock preprocessing (leave running)
-python preprocessing/mock/run.py &
+The existing `TRMRouter._apply()` method updates in-memory state. A persistence layer wraps each call to also write to the database. The in-memory logic does not change.
 
-# 3. Start mock capture (leave running)
-python capture/mock/run.py &
+A new DB-driven entry point is added alongside the existing scenario runner. Scenario tooling is completely unaffected.
 
-# 4. Start TRM in DB-driven mode (leave running)
-python src/main_live.py
+### New Entry Point
 
-# 5. Open the web UI
-# http://localhost:3000
+`src/main_live.py` — polls for `processed` records from the DB, feeds them into `TRMRouter`, writes results back.
+
+```python
+# Pseudocode
+while True:
+    packet = await db.fetch_one("SELECT * FROM transmissions WHERE status = 'processed' LIMIT 1")
+    if not packet:
+        await asyncio.sleep(2)
+        continue
+
+    await db.update_status(packet.id, 'routing')
+    ready_packet = ReadyPacket(id=packet.id, timestamp=packet.timestamp, text=packet.text, metadata=...)
+    record = await router.route(ready_packet)
+    await db.persist_routing_result(packet.id, record, router.context)
 ```
 
-Watch packets appear in the UI every ~20 seconds (10s capture interval + 10s ASR delay). The TRM routes each one as it becomes available. The UI updates live via WebSocket and hydrates correctly on refresh.
+### Persistence Function
+
+`db/persist_routing_result()` — called after every successful `router.route()` call. Must be atomic per packet.
+
+```python
+async def persist_routing_result(session, packet_id, record, context):
+    async with session.begin():
+        # 1. Upsert thread if new or existing
+        if record.thread_decision in ('new', 'existing'):
+            thread = get_thread_from_context(context, record.thread_id)
+            await upsert_thread(session, thread)
+
+        # 2. Upsert event if new or existing
+        if record.event_decision in ('new', 'existing'):
+            event = get_event_from_context(context, record.event_id)
+            await upsert_event(session, event)
+
+        # 3. Upsert thread_events join if both present
+        if record.thread_id and record.event_id:
+            await upsert_thread_event(session, record.thread_id, record.event_id)
+
+        # 4. Write routing record
+        await insert_routing_record(session, record)
+
+        # 5. Update transmission
+        await update_transmission(session, packet_id, record)
+```
+
+**Critical:** Everything inside `session.begin()` is one transaction. If any write fails, nothing is committed and the packet status does not flip to `'routed'`. The next poll will pick it up and retry.
+
+### Done When
+
+- Running `python src/main_live.py` with mock capture and preprocessing active routes all 12 packets
+- All records in `transmissions` end with `status = 'routed'`
+- `threads`, `events`, `thread_events`, and `routing_records` tables are populated correctly
+- In-memory TRM state and DB state match after every packet
+
+---
+
+## Sub-phase 3.4 — UI Hydration from Database
+
+### New API Endpoints
+
+Added to `api/routes/live.py`:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/live/threads` | All open threads with their packets (joined from transmissions) |
+| `GET` | `/api/live/events` | All open events with linked thread IDs |
+| `GET` | `/api/live/transmissions` | All routed transmissions ordered by timestamp |
+
+Response shapes mirror the existing TypeScript types in `web/src/types/trm.ts` so the frontend needs minimal changes.
+
+### Frontend Changes
+
+`web/src/app/live/page.tsx` — new page. On load:
+1. Fetches `/api/live/threads`, `/api/live/events`, `/api/live/transmissions`
+2. Reconstructs `TRMContext` from the response
+3. Renders the existing dashboard components (ThreadLane, EventCard, TimelineRow) — same components, different data source
+4. Opens WebSocket to receive new `packet_routed` messages as they arrive
+5. On `packet_routed`, merges the new routing record into local state
+
+The WebSocket message format for live mode is the same as scenario runs — `packet_routed` with `context` and `incoming_packet`. The existing `useRunSocket` hook can be reused or extended.
+
+### Done When
+
+- `/live` page renders current DB state on load
+- Page refresh shows the same state — nothing lost
+- A second browser tab opened mid-run shows the same state as the first
+- New packets routed by the TRM appear in the UI within a few seconds via WebSocket
+
+---
+
+## Running a Full Simulation
+
+```bash
+# 1. Apply migrations
+alembic upgrade head
+
+# 2. Reset the database (between runs)
+python db/reset.py
+
+# 3. Start mock preprocessing in background
+python preprocessing/mock/run.py &
+
+# 4. Start mock capture in background
+python capture/mock/run.py &
+
+# 5. Start TRM live runner
+python src/main_live.py
+
+# 6. Start API
+uvicorn api.main:app --reload
+
+# 7. Open the web UI
+# http://localhost:3000/live
+```
+
+Packets appear in the UI every ~20 seconds (10s capture + 10s ASR delay). Refresh at any point — state is fully restored from the DB.
