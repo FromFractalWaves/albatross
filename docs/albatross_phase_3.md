@@ -53,7 +53,7 @@ Scenarios remain what they are — a dev and tuning tool that runs against flat 
 ```
 albatross/
 ├── api/                     # FastAPI backend
-├── src/                     # TRM pipeline (PacketLoader, TRMRouter, models)
+├── trm/                     # TRM pipeline (PacketLoader, TRMRouter, models)
 ├── web/                     # Next.js frontend
 ├── data/                    # Scenario datasets (flat files)
 ├── docs/
@@ -72,12 +72,12 @@ albatross/
 │   └── migrations/
 ├── capture/
 │   └── mock/                # Mock capture — emits fake TransmissionPackets on a timer
-│       └── src/
+│       └── trm/
 ├── preprocessing/
 │   └── mock/                # Mock ASR — sleeps N seconds, passes packet through
-│       └── src/
+│       └── trm/
 ├── api/                     # FastAPI backend (extended with DB-read endpoints)
-├── src/                     # TRM pipeline (extended with persistence layer)
+├── trm/                     # TRM pipeline (extended with persistence layer)
 ├── web/                     # Next.js frontend (extended with DB hydration on load)
 ├── data/                    # Scenario datasets (unchanged)
 ├── docs/
@@ -135,7 +135,7 @@ Define the shared types in `contracts/` that all modules import. These are the b
 - `ReadyPacket` — alias for ProcessedPacket
 - `RoutingRecord` — TRM output
 
-**Done.** `contracts/models.py` exists with all four boundary types. All modules import from `contracts/`, not from each other. `src/models/packets.py` re-exports from contracts. `RoutingRecord` uses plain strings for decision fields (enums stay TRM-internal). 28 tests pass.
+**Done.** `contracts/models.py` exists with all four boundary types. All modules import from `contracts/`, not from each other. `trm/models/packets.py` re-exports from contracts. `RoutingRecord` uses plain strings for decision fields (enums stay TRM-internal). 28 tests pass.
 
 ---
 
@@ -202,7 +202,7 @@ After each packet is routed:
 
 The TRM also needs a DB-driven entry point — polling for `processed` records rather than consuming from `PacketLoader`. Scenario tooling is unaffected; it continues to use `PacketLoader` and in-memory state. The DB-driven path is a separate entry point.
 
-**Done.** `db/persist.py` provides `persist_routing_result()` — atomic per-packet persistence within a single transaction (upsert thread, upsert event, upsert join, write routing record, update transmission to `routed`). `RoutingRecord.to_orm()` added to contracts, same pattern as `TransmissionPacket.to_orm()`. `src/main_live.py` is the DB-driven entry point — polls for `processed` rows, feeds them into `TRMRouter`, persists results. 5 new tests cover the persistence layer.
+**Done.** `db/persist.py` provides `persist_routing_result()` — atomic per-packet persistence within a single transaction (upsert thread, upsert event, upsert join, write routing record, update transmission to `routed`). `RoutingRecord.to_orm()` added to contracts, same pattern as `TransmissionPacket.to_orm()`. `trm/main_live.py` is the DB-driven entry point — polls for `processed` rows, feeds them into `TRMRouter`, persists results. 5 new tests cover the persistence layer.
 
 ---
 

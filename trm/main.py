@@ -2,9 +2,9 @@ import asyncio
 import logging
 from pathlib import Path
 
-from src.pipeline.loader import PacketLoader
-from src.pipeline.queue import PacketQueue
-from src.pipeline.router import TRMRouter
+from trm.pipeline.loader import PacketLoader
+from trm.pipeline.queue import PacketQueue
+from trm.pipeline.router import TRMRouter
 from dotenv import load_dotenv
 import os
 

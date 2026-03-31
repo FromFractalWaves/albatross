@@ -12,7 +12,7 @@ from db.models import (
     ThreadEvent as ORMThreadEvent,
     Transmission,
 )
-from src.models.router import TRMContext
+from trm.models.router import TRMContext
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ from contracts.models import ReadyPacket
 from db.models import Transmission
 from db.persist import persist_routing_result
 from db.session import AsyncSessionLocal
-from src.pipeline.router import TRMRouter
+from trm.pipeline.router import TRMRouter
 
 load_dotenv()
 

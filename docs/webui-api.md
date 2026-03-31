@@ -114,13 +114,13 @@ albatross/
 │   └── services/
 │       └── runner.py           # Wraps TRM pipeline — starts runs, manages state
 ├── web/                        # Next.js frontend
-│   ├── src/
+│   ├── trm/
 │   │   ├── app/                # Next.js app router pages
 │   │   ├── components/         # React components
 │   │   ├── hooks/              # WebSocket hook, etc.
 │   │   └── types/              # TypeScript types mirroring Pydantic models
 │   └── ...
-├── src/                        # Existing TRM pipeline (unchanged)
+├── trm/                        # Existing TRM pipeline (unchanged)
 │   ├── models/
 │   │   ├── packets.py
 │   │   └── router.py
@@ -133,7 +133,7 @@ albatross/
     └── webui-api.md            # This document
 ```
 
-The `api/` layer imports from `src/` — it wraps the existing pipeline, it doesn't replace it.
+The `api/` layer imports from `trm/` — it wraps the existing pipeline, it doesn't replace it.
 
 ---
 
@@ -145,7 +145,7 @@ Minimal. The `TRMRouter.route()` method already returns a `RoutingRecord` and up
 2. After each call, serialize `router.context` and the `RoutingRecord`
 3. Push that over the WebSocket
 
-The main change: `src/main.py` currently orchestrates the whole run inline. That orchestration moves to `api/services/runner.py`. The pipeline components (`PacketLoader`, `PacketQueue`, `TRMRouter`) stay exactly as they are.
+The main change: `trm/main.py` currently orchestrates the whole run inline. That orchestration moves to `api/services/runner.py`. The pipeline components (`PacketLoader`, `PacketQueue`, `TRMRouter`) stay exactly as they are.
 
 ---
 
@@ -176,7 +176,7 @@ Each phase is self-contained. Build it, test it, verify it works, then move on. 
 - `api/routes/scenarios.py` — two endpoints:
   - `GET /api/scenarios` — scan `data/` directory, return list of scenarios grouped by tier (each entry: tier, scenario name, path)
   - `GET /api/scenarios/{tier}/{scenario}` — return full scenario detail: packets.json contents, expected_output.json contents, README.md text
-- Ensure `api/` can import from `src/` cleanly (may need path setup or a workspace config)
+- Ensure `api/` can import from `trm/` cleanly (may need path setup or a workspace config)
 
 **What NOT to build:** No runs, no WebSocket, no frontend, no runner service.
 

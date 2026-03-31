@@ -20,7 +20,7 @@ from db.models import (
     Transmission,
 )
 from db.persist import persist_routing_result
-from src.models.router import Event, Thread, TRMContext
+from trm.models.router import Event, Thread, TRMContext
 from contracts.models import ReadyPacket
 
 

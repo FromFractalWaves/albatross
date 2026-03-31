@@ -9,9 +9,9 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from contracts.models import ReadyPacket
-from src.pipeline.loader import PacketLoader
-from src.pipeline.queue import PacketQueue
-from src.pipeline.router import TRMRouter
+from trm.pipeline.loader import PacketLoader
+from trm.pipeline.queue import PacketQueue
+from trm.pipeline.router import TRMRouter
 
 logger = logging.getLogger(__name__)
 

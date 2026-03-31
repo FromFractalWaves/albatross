@@ -6,7 +6,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-PY="$ROOT/src/.venv/bin/python"
+PY="$ROOT/trm/.venv/bin/python"
 
 PIDS=()
 
@@ -49,7 +49,7 @@ PIDS+=($!)
 
 # 7. Start TRM live runner (polls for processed rows)
 echo "Starting TRM live runner..."
-(cd "$ROOT" && "$PY" src/main_live.py) &
+(cd "$ROOT" && "$PY" trm/main_live.py) &
 PIDS+=($!)
 
 echo ""

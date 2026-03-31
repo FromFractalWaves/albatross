@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 
 from contracts.models import ReadyPacket, RoutingRecord
-from src.models.router import TRMContext
+from trm.models.router import TRMContext
 
 
 def _make_mock_router():

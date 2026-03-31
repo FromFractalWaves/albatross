@@ -3,7 +3,7 @@ import logging
 import anthropic
 
 from contracts.models import ReadyPacket, RoutingRecord
-from src.models.router import (
+from trm.models.router import (
     Thread,
     Event,
     TRMContext,

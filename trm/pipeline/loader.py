@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from contracts.models import ReadyPacket
-from src.pipeline.queue import PacketQueue
+from trm.pipeline.queue import PacketQueue
 
 logger = logging.getLogger(__name__)
 

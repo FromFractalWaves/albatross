@@ -43,7 +43,7 @@ Albatross is being built in phases. Each phase is documented separately.
 
 Phase 1 and Phase 2 are complete. The TRM pipeline runs against four Tier 1 scenarios. The FastAPI backend serves scenario data and streams live runs over WebSocket. The Next.js frontend renders a live dashboard — thread lanes, events view, chronological timeline, decision badges.
 
-Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), 3.2b (mock pipeline + DB reset), and 3.3 (TRM persistence layer) are complete. SQLAlchemy 2.0 async models with Alembic migrations, shared Pydantic boundary types in `contracts/`, mock capture/preprocessing scripts, and DB-driven TRM routing (`src/main_live.py`) are in place. The remaining sub-phase wires up UI hydration from the database.
+Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), 3.2b (mock pipeline + DB reset), and 3.3 (TRM persistence layer) are complete. SQLAlchemy 2.0 async models with Alembic migrations, shared Pydantic boundary types in `contracts/`, mock capture/preprocessing scripts, and DB-driven TRM routing (`trm/main_live.py`) are in place. The remaining sub-phase wires up UI hydration from the database.
 
 ---
 
@@ -69,7 +69,7 @@ alembic upgrade head
 python db/reset.py                  # clear all tables
 python preprocessing/mock/run.py &  # start preprocessing (polls for captured rows)
 python capture/mock/run.py &        # start capture (writes packets to DB)
-python src/main_live.py             # start TRM (polls for processed rows, routes + persists)
+python trm/main_live.py             # start TRM (polls for processed rows, routes + persists)
 ```
 
 **Tests:**

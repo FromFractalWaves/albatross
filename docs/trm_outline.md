@@ -6,7 +6,7 @@
 
 ## What's Built
 
-### TRM Pipeline (`src/`)
+### TRM Pipeline (`trm/`)
 
 - Async packet pipeline — `PacketLoader` reads `packets.json` and pushes `ReadyPacket` objects into an `asyncio.Queue` with timestamp-based replay and configurable `speed_factor`
 - `TRMRouter` — LLM-backed router that processes one `ReadyPacket` at a time, maintains full session context, and emits a `RoutingRecord` per packet
@@ -49,10 +49,10 @@
 - Async session factory from `DATABASE_URL` env var, defaults to SQLite via `aiosqlite`
 - Alembic configured for async with `render_as_batch=True` for SQLite compatibility
 
-### TRM Persistence Layer (`db/persist.py`, `src/main_live.py`)
+### TRM Persistence Layer (`db/persist.py`, `trm/main_live.py`)
 
 - `db/persist.py` — `persist_routing_result()`: atomic per-packet persistence within a single DB transaction. Upserts thread, event, thread_events join, writes routing record via `RoutingRecord.to_orm()`, updates transmission status to `routed`.
-- `src/main_live.py` — DB-driven TRM entry point. Polls for `status = 'processed'` transmissions, feeds them into `TRMRouter`, persists results. Idle cycle exit (MAX_IDLE=10). Runs alongside mock capture and preprocessing scripts.
+- `trm/main_live.py` — DB-driven TRM entry point. Polls for `status = 'processed'` transmissions, feeds them into `TRMRouter`, persists results. Idle cycle exit (MAX_IDLE=10). Runs alongside mock capture and preprocessing scripts.
 - `RoutingRecord.to_orm()` on contracts model — same `to_orm()` pattern as `TransmissionPacket`.
 
 ### Tests (`tests/`)
@@ -123,7 +123,7 @@ albatross/
 │   └── test_trm_persistence.py # TRM persistence tests (5)
 ├── dev.sh                        # Launch API + frontend together
 ├── web/
-│   ├── src/
+│   ├── trm/
 │   │   ├── app/
 │   │   │   ├── globals.css       # Design tokens (Tailwind v4 @theme), base styles
 │   │   │   ├── layout.tsx        # Root layout, JetBrains Mono font
@@ -161,7 +161,7 @@ albatross/
 │   │       ├── websocket.ts      # RunStarted, PacketRouted, RunComplete, RunError messages
 │   │       └── scenarios.ts      # ScenarioSummary, TierGroup, ScenarioDetail, etc.
 │   └── ...
-└── src/
+└── trm/
     ├── main.py
     ├── main_live.py          # DB-driven TRM entry point (polls for processed rows)
     ├── models/

@@ -14,8 +14,8 @@ The TRM is a stateful, LLM-backed runtime. It processes one packet at a time, ma
 
 The runtime is implemented across two files:
 
-- `src/models/router.py` — data models: `Thread`, `Event`, `RoutingRecord`, `TRMContext`, `ThreadDecision`, `EventDecision`
-- `src/pipeline/router.py` — `TRMRouter`: the stateful runtime, system prompt, LLM call, state update logic
+- `trm/models/router.py` — data models: `Thread`, `Event`, `RoutingRecord`, `TRMContext`, `ThreadDecision`, `EventDecision`
+- `trm/pipeline/router.py` — `TRMRouter`: the stateful runtime, system prompt, LLM call, state update logic
 
 The pipeline is async. The router consumes `ReadyPacket` objects from a `PacketQueue` one at a time. Each packet triggers a full LLM call with the current session context. The router updates its state from the response and emits a `RoutingRecord`.
 

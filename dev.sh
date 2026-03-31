@@ -18,7 +18,7 @@ trap cleanup EXIT INT TERM
 
 # Start API
 echo "Starting API server on :8000..."
-(cd "$ROOT" && src/.venv/bin/python -m uvicorn api.main:app --reload --port 8000) &
+(cd "$ROOT" && trm/.venv/bin/python -m uvicorn api.main:app --reload --port 8000) &
 API_PID=$!
 
 # Start Next.js frontend

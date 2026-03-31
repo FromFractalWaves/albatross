@@ -162,9 +162,9 @@ alembic upgrade head
 
 A single source of truth for the Pydantic types that cross module boundaries. Every module imports boundary types from `contracts/`, not from each other.
 
-### What Goes in Contracts vs What Stays in src/
+### What Goes in Contracts vs What Stays in trm/
 
-This distinction matters. Not everything in `src/models/` is a boundary type.
+This distinction matters. Not everything in `trm/models/` is a boundary type.
 
 **Moves to `contracts/`** — types that cross stage boundaries:
 - `TransmissionPacket` — capture output, preprocessing input
@@ -172,13 +172,13 @@ This distinction matters. Not everything in `src/models/` is a boundary type.
 - `ReadyPacket` — alias for `ProcessedPacket` once dequeued by TRM
 - `RoutingRecord` — TRM output, DB/analysis input
 
-**Stays in `src/models/`** — types that are TRM-internal only:
+**Stays in `trm/models/`** — types that are TRM-internal only:
 - `Thread` — in-memory context state, includes `packets: list[ReadyPacket]` and `event_ids`
 - `Event` — in-memory context state
 - `TRMContext` — the full session state sent to the LLM each turn
 - `ThreadDecision` / `EventDecision` — enums used internally by the router
 
-The rule: if a type is only ever used inside the TRM, it stays in `src/`. If it crosses a stage boundary, it lives in `contracts/`.
+The rule: if a type is only ever used inside the TRM, it stays in `trm/`. If it crosses a stage boundary, it lives in `contracts/`.
 
 ### File Structure
 
@@ -229,9 +229,9 @@ class RoutingRecord(BaseModel):
 
 ### Files That Need Import Updates
 
-These files currently import packet or routing types from `src/models/` and need to be updated to import from `contracts/` instead:
+These files currently import packet or routing types from `trm/models/` and need to be updated to import from `contracts/` instead:
 
-- `src/pipeline/router.py` — imports `ReadyPacket`, `RoutingRecord`
+- `trm/pipeline/router.py` — imports `ReadyPacket`, `RoutingRecord`
 - `api/services/runner.py` — imports `RoutingRecord`
 - `tests/conftest.py` and test mocks — any mock that constructs `ReadyPacket` or `RoutingRecord` directly
 
@@ -240,8 +240,8 @@ Changes are mechanical — find/replace imports, verify tests still pass.
 ### Done When
 
 - `contracts/models.py` exists and is importable
-- `src/models/packets.py` reconciled — `ProcessedPacket` and `ReadyPacket` definitions match contracts
-- No file imports boundary types from `src/models/` directly
+- `trm/models/packets.py` reconciled — `ProcessedPacket` and `ReadyPacket` definitions match contracts
+- No file imports boundary types from `trm/models/` directly
 - All 16 tests still pass
 
 ---
@@ -411,7 +411,7 @@ class RoutingRecord(BaseModel):
 
 ### New Entry Point
 
-`src/main_live.py` — polls for `processed` records from the DB, feeds them into `TRMRouter`, writes results back. Follows the same exit condition pattern as `preprocessing/mock/run.py` — idle cycle counter, exits when nothing remains.
+`trm/main_live.py` — polls for `processed` records from the DB, feeds them into `TRMRouter`, writes results back. Follows the same exit condition pattern as `preprocessing/mock/run.py` — idle cycle counter, exits when nothing remains.
 
 ```python
 # Pseudocode
@@ -490,7 +490,7 @@ async def persist_routing_result(session, packet_id, record, context):
 
 ### Done When
 
-- Running `python src/main_live.py` with mock capture and preprocessing active routes all 12 packets
+- Running `python trm/main_live.py` with mock capture and preprocessing active routes all 12 packets
 - All records in `transmissions` end with `status = 'routed'`
 - `threads`, `events`, `thread_events`, and `routing_records` tables are populated correctly
 - In-memory TRM state and DB state match after every packet
@@ -557,7 +557,7 @@ python preprocessing/mock/run.py &
 python capture/mock/run.py &
 
 # 5. Start TRM live runner
-python src/main_live.py
+python trm/main_live.py
 
 # 6. Start API
 uvicorn api.main:app --reload

@@ -317,7 +317,7 @@ The scenario tooling will continue to work as-is for prompt development and regr
 
 ## What the TRM Needs to Change for Production
 
-The current TRM (`src/pipeline/router.py`) is designed for bounded scenario runs. For production:
+The current TRM (`trm/pipeline/router.py`) is designed for bounded scenario runs. For production:
 
 ### Session continuity
 
