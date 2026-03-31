@@ -1,12 +1,24 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## Project
 
-The Thread Routing Module (TRM) is part of the Albatross pipeline — a pattern for turning continuous data streams into structured intelligence. The TRM takes processed text packets and makes two independent routing decisions per packet: **thread** (which conversation?) and **event** (which real-world occurrence?). It is domain-agnostic; domain-specific signals live in packet metadata.
+Albatross is a general-purpose pipeline for turning continuous data streams into structured, queryable intelligence. The reference implementation is a P25 trunked radio dispatch intelligence system.
 
-Read `docs/albatross.md` first for the big picture, then `docs/trm_spec.md` for the TRM specification.
+The pipeline has five stages: Data Stream → Packets → Preprocessing → TRM → Analysis.
+
+The **Thread Routing Module (TRM)** is the intelligence layer. It takes processed text packets and makes two independent routing decisions per packet: **thread** (which conversation?) and **event** (which real-world occurrence?). It is domain-agnostic — domain-specific signals live in packet metadata.
+
+Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for the full phase history.
+
+## Current Phase
+
+**Phase 3 — Database & Inter-Module Data Pipeline.** See `docs/albatross_phase_3.md` for the plan and `docs/db-datapipeline.md` for implementation specs.
+
+Phases 1 (TRM core) and 2 (Web UI + API) are complete. The system currently works but has no persistence — runs are in-memory and page refresh loses state. Phase 3 introduces a shared database, a contracts layer, a mock pipeline driven by synthetic radio data, and UI hydration from the DB on load.
+
+The existing scenario tooling (`data/`, `api/`, `src/`, `web/`) is **not being replaced** — it continues to work as-is for development and tuning. Phase 3 adds new modules alongside it.
 
 ## Running
 
@@ -61,29 +73,30 @@ FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `src/
 
 ### Frontend (`web/`)
 
-Next.js (TypeScript, App Router) frontend with a visual dashboard for watching the TRM route packets in real time. Uses Tailwind CSS v4 with custom design tokens, shadcn/ui `cn()` utility, and JetBrains Mono font.
+Next.js (TypeScript, App Router) frontend with a visual dashboard for watching the TRM route packets in real time. Uses Tailwind CSS v4 with custom design tokens and JetBrains Mono font.
 
 - **`web/src/types/trm.ts`** — TypeScript interfaces mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`.
 - **`web/src/types/websocket.ts`** — Discriminated union for WebSocket messages: `RunStarted`, `PacketRouted`, `RunComplete`, `RunError`.
 - **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, error, scenario }`.
 - **`web/src/lib/`** — `utils.ts` (cn helper), `threadColors.ts` (rotating color palette for threads), `packetDecisions.ts` (joins routing records to packets by ID), `api.ts` (API_BASE and WS_BASE constants).
 - **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`, `HubTopBar`, `TabBar`.
-- **`web/src/types/scenarios.ts`** — TypeScript interfaces for scenario data: `ScenarioSummary`, `TierGroup`, `ScenarioDetail`, `ScenarioPacket`, `ExpectedOutput`.
-- **`web/src/app/page.tsx`** — Scenario hub: fetches `GET /api/scenarios`, lists tiers and scenarios with tabs (SCENARIOS active, LIVE/HISTORY disabled), links to `/scenarios/{tier}/{scenario}`.
-- **`web/src/app/scenarios/[tier]/[scenario]/page.tsx`** — Scenario detail: renders README, packet list, expected output (collapsible), run config (speed factor/buffer count), launches a run via `POST /api/runs` and redirects to `/run/{runId}`.
-- **`web/src/app/run/[runId]/page.tsx`** — Live run dashboard with three tabs: LIVE (thread lanes with color-coded packets), EVENTS (event cards with thread links), TIMELINE (chronological packet list). Incoming packet banner, buffer zone, decision badges, top bar with stats, collapsible context inspector.
+- **`web/src/app/page.tsx`** — Scenario hub: lists tiers and scenarios, links to detail pages.
+- **`web/src/app/scenarios/[tier]/[scenario]/page.tsx`** — Scenario detail: README, packet list, expected output, run config, launches run.
+- **`web/src/app/run/[runId]/page.tsx`** — Live run dashboard: LIVE (thread lanes), EVENTS (event cards), TIMELINE (chronological list). Incoming packet banner, buffer zone, decision badges, context inspector.
 
 ### Tests (`tests/`)
 
 Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 16 tests total: scenario endpoints (9 tests) and run/WebSocket flow (7 tests).
 
-### Key design decisions
+### Key Design Decisions
 
 - **Stateful LLM**: Full session context is sent every turn. The LLM maintains and updates state, not a stateless classifier.
 - **Two independent decision layers**: Thread and event routing are orthogonal. A thread can have no event; an event can span multiple threads.
 - **Buffering**: Limited buffer slots (default 5) let the LLM defer ambiguous packets. Buffer exhaustion falls back to UNKNOWN.
+- **DB as single source of truth** (Phase 3): All pipeline stages write to the shared database. WebSocket is the live edge only — the DB is the ground truth. Page hydration reads from DB, not from in-memory state.
+- **Scenario tooling stays separate**: Scenarios run against flat files and in-memory state. They do not touch the database. This path is permanent — it exists for development and prompt tuning regardless of what production does.
 
-## Test data
+## Test Data
 
 Scenarios live under `data/tier_one/`, `data/tier_two/`, etc. Each scenario folder contains:
 - `packets.json` — input packets
@@ -92,13 +105,19 @@ Scenarios live under `data/tier_one/`, `data/tier_two/`, etc. Each scenario fold
 
 Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interleaved`, `scenario_03_event_opens_mid_thread`, `scenario_04_three_way_split`.
 
+The augmented dataset for the Phase 3 mock pipeline lives at `data/tier_one/scenario_02_interleaved/packets_radio.json` — same packets with radio metadata added. See `docs/db-datapipeline.md` for details.
+
 ## Docs
 
-- `docs/albatross.md` — the Albatross pipeline pattern
-- `docs/trm_spec.md` — TRM spec: packet types, routing decisions, golden dataset tiers, scoring metrics
-- `docs/trm_runtime_loop.md` — per-packet execution loop, context schema, buffering, open problems
-- `docs/albatross_runtime_loop.md` — Albatross-level runtime loop
-- `docs/trm_outline.md` — current state and next steps
-- `docs/webui-api.md` — 6-phase plan for web UI and API (all phases done)
-- `docs/ui_spec.md` — visual design spec: design tokens, component specs, layout, interaction patterns
-- `docs/ui_mockup.jsx` — interactive React mockup with inline styles and mock data, component reference for Phase 4+
+| Document | Description |
+|----------|-------------|
+| `docs/albatross.md` | Start here — the Albatross pattern, pipeline stages, phase history |
+| `docs/albatross_phase_3.md` | Phase 3 plan — DB, contracts layer, mock pipeline, UI hydration |
+| `docs/db-datapipeline.md` | Phase 3 implementation specs — synthetic data, simulation parameters, reset |
+| `docs/albatross_runtime_loop.md` | Full radio pipeline architecture and DB schema (primary Phase 3 reference) |
+| `docs/trm_spec.md` | TRM spec — packet types, routing decisions, golden dataset tiers, scoring |
+| `docs/trm_runtime_loop.md` | TRM runtime loop — context schema, per-packet decision cycle, buffering |
+| `docs/trm_outline.md` | TRM current state and key design decisions |
+| `docs/webui-api.md` | Web UI & API build plan — six sub-phases, all complete |
+| `docs/ui_spec.md` | Visual design spec — design tokens, components, layout |
+| `docs/ui_mockup.jsx` | Interactive React mockup — component reference |
