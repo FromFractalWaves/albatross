@@ -8,15 +8,13 @@
 
 ### Albatross Phase Numbering
 
-The repo was originally named `thread-routing-module` and the internal documents reflect an earlier, narrower scope. The correct Albatross-level phase numbering is:
-
 | Phase | Description | Key Documents |
 |-------|-------------|---------------|
 | **Phase 1** | TRM core — async packet pipeline, LLM-backed router, scenario tooling | `docs/trm_spec.md`, `docs/trm_runtime_loop.md` |
 | **Phase 2** | Web UI + API — FastAPI backend, Next.js dashboard, WebSocket streaming | `docs/webui-api.md` (internal phases 1–6 are sub-phases of this) |
 | **Phase 3** | Database + inter-module data pipeline | This document |
 
-The phase numbering inside `webui-api.md` (phases 1–6) refers to sub-phases of the web build, not Albatross-level phases. The document `docs/albatross_runtime_loop.md` is poorly named — it is actually the architectural spec for the full radio pipeline and database design, and is the primary reference for Phase 3.
+The phase numbering inside `webui-api.md` (phases 1–6) refers to sub-phases of the web build, not Albatross-level phases. The document `docs/albatross_runtime_loop.md` is the architectural spec for the full radio pipeline and database design, and is the primary reference for Phase 3 despite its name.
 
 ---
 
@@ -36,9 +34,21 @@ Scenarios remain what they are — a dev and tuning tool that runs against flat 
 
 ---
 
-## Repo Restructure
+## Repo Structure
 
-With Phase 3, the repo is renamed from `thread-routing-module` to `albatross`. The structure expands to reflect the full pipeline:
+### Current State
+
+```
+albatross/
+├── api/                     # FastAPI backend
+├── src/                     # TRM pipeline (PacketLoader, TRMRouter, models)
+├── web/                     # Next.js frontend
+├── data/                    # Scenario datasets (flat files)
+├── docs/
+└── tests/
+```
+
+### Target State (end of Phase 3)
 
 ```
 albatross/
@@ -48,21 +58,21 @@ albatross/
 │   ├── models.py
 │   ├── session.py
 │   └── migrations/
-├── capture/                 # Stage 1
+├── capture/
 │   └── mock/                # Mock capture — emits fake TransmissionPackets on a timer
 │       └── src/
-├── preprocessing/           # Stage 2
+├── preprocessing/
 │   └── mock/                # Mock ASR — sleeps N seconds, passes packet through
 │       └── src/
-├── trm/                     # Stage 3 — existing TRM pipeline code
-│   ├── src/
-│   ├── api/
-│   ├── web/
-│   └── data/
-└── docs/
+├── api/                     # FastAPI backend (extended with DB-read endpoints)
+├── src/                     # TRM pipeline (extended with persistence layer)
+├── web/                     # Next.js frontend (extended with DB hydration on load)
+├── data/                    # Scenario datasets (unchanged)
+├── docs/
+└── tests/
 ```
 
-The `contracts/` layer is the key structural decision. Every module imports from contracts, not from each other. If a new preprocessing implementation is added (real ASR, a different model, a non-audio domain), it just has to produce a valid `ProcessedPacket`. The TRM does not care what produced it.
+The `contracts/` layer is the key structural decision. Every module imports from contracts, not from each other. If a new preprocessing implementation is added later — real ASR, a different model, a non-audio domain — it just has to produce a valid `ProcessedPacket`. The TRM does not care what produced it.
 
 ---
 
@@ -85,6 +95,8 @@ When this is working end to end, a page refresh shows the current state. The arc
 
 ## Build Order
 
+Detailed implementation specs for each step live in `docs/db-datapipeline.md` as they are written. This section defines the steps and their completion criteria.
+
 ### Step 1 — Database schema + ORM setup
 
 Stand up the database. Define all models. Verify migrations work. Nothing else runs until this exists.
@@ -96,7 +108,7 @@ The schema is already designed in `docs/albatross_runtime_loop.md`. The tables a
 - `thread_events` — join table
 - `routing_records` — audit log of every TRM decision
 
-Engine decision: SQLite for local dev, PostgreSQL for production. The ORM should abstract this. Decision on ORM (SQLAlchemy, Tortoise, raw asyncpg) to be made at implementation time.
+Engine: SQLite for local dev, PostgreSQL for production. The ORM should abstract this. ORM decision (SQLAlchemy, Tortoise, raw asyncpg) to be made at implementation time.
 
 **Done when:** Schema exists, migrations run cleanly, models are importable from `db/`.
 
@@ -110,7 +122,7 @@ Define the shared types in `contracts/` that all modules import. These are the b
 - `ProcessedPacket` — TRM input (domain-agnostic)
 - `RoutingRecord` — TRM output
 
-The existing Pydantic models in `trm/src/models/` are the reference. This step is mostly moving and clarifying, not inventing.
+The existing Pydantic models in `src/models/` are the reference. This step is mostly moving and clarifying, not inventing.
 
 **Done when:** `contracts/models.py` exists, existing TRM models are reconciled against it, no module imports types from another module directly.
 
@@ -118,7 +130,7 @@ The existing Pydantic models in `trm/src/models/` are the reference. This step i
 
 ### Step 3 — Augment a Tier 1 scenario with radio metadata
 
-Take `scenario_02_interleaved` (or similar). Add radio-style metadata to each packet:
+Take `scenario_02_interleaved`. Add radio-style metadata to each packet:
 
 ```json
 {
@@ -136,19 +148,19 @@ Take `scenario_02_interleaved` (or similar). Add radio-style metadata to each pa
 }
 ```
 
-This becomes the seed data for the mock pipeline. It looks like real radio data. The TRM will treat the metadata as routing signals, same as it would in production.
+This becomes the seed data for the mock pipeline. It looks like real radio data. The TRM treats the metadata as routing signals, same as it would in production.
 
-**Done when:** Augmented `packets.json` exists. The text content is unchanged — only metadata is added.
+**Done when:** Augmented `packets.json` exists. Text content is unchanged — only metadata is added.
 
 ---
 
 ### Step 4 — Mock capture module
 
-A script or service in `capture/mock/` that reads the augmented packets and writes them to the database one at a time, with a configurable delay between packets, as if they were arriving from a live radio source.
+A script in `capture/mock/` that reads the augmented packets and writes them to the database one at a time, with a configurable delay between packets, as if they were arriving from a live radio source.
 
-Each packet written as a `transmissions` row with `status = 'captured'`. The text field is intentionally left null — capture doesn't know the text yet, that's ASR's job.
+Each packet written as a `transmissions` row with `status = 'captured'`. The text field is intentionally left null — capture doesn't know the text yet, that's preprocessing's job.
 
-After writing each record, signals the preprocessing stage that a new record is ready. Signaling mechanism for Phase 3: database polling (simplest, no extra infra, inherently restartable). ZMQ push is deferred until real capture is built.
+Signaling mechanism for Phase 3: database polling. Simple, no extra infrastructure, inherently restartable. ZMQ push is deferred until real capture is built.
 
 **Done when:** Running the mock capture script populates the `transmissions` table with `status = 'captured'` rows, one by one, on a timer.
 
@@ -156,9 +168,9 @@ After writing each record, signals the preprocessing stage that a new record is 
 
 ### Step 5 — Mock preprocessing module
 
-A script or service in `preprocessing/mock/` that polls for `captured` records, simulates ASR processing time (configurable sleep, default 5–10 seconds), then writes the text back to the record and flips `status = 'processed'`.
+A script in `preprocessing/mock/` that polls for `captured` records, simulates ASR processing time (configurable sleep, default 5–10 seconds), then writes the text back to the record and flips `status = 'processed'`.
 
-The text already exists in the augmented dataset — mock ASR just copies it from the seed data into the `text` field. It also writes mock ASR metadata (`asr_model = 'mock'`, `asr_confidence = 1.0`, `asr_passes = 1`).
+The text already exists in the augmented dataset — mock preprocessing just copies it into the `text` field. Also writes mock ASR metadata (`asr_model = 'mock'`, `asr_confidence = 1.0`, `asr_passes = 1`).
 
 **Done when:** Records that enter as `status = 'captured'` emerge as `status = 'processed'` with text populated, after a simulated delay.
 
@@ -175,9 +187,7 @@ After each packet is routed:
 - Create or update row in `events`
 - Update `thread_events` join table
 
-The TRM also needs to poll for `processed` records (or receive signals) rather than consuming from a `PacketLoader`. This is the point where the TRM transitions from scenario-driven to DB-driven for production operation.
-
-Scenario tooling is unaffected — it continues to use `PacketLoader` and in-memory state. The DB-driven path is a separate entry point.
+The TRM also needs a DB-driven entry point — polling for `processed` records rather than consuming from `PacketLoader`. Scenario tooling is unaffected, it continues to use `PacketLoader` and in-memory state. The DB-driven path is a separate entry point.
 
 **Done when:** A packet that enters as `status = 'processed'` emerges as `status = 'routed'`, with routing records, thread, and event rows written to the database.
 
@@ -185,7 +195,7 @@ Scenario tooling is unaffected — it continues to use `PacketLoader` and in-mem
 
 ### Step 7 — UI hydration from database
 
-Update the web UI and API so that on page load, the current state is read from the database rather than requiring an active WebSocket session.
+Update the web UI and API so that on page load, current state is read from the database rather than requiring an active WebSocket session.
 
 New API endpoints:
 - `GET /api/live/threads` — all open threads with their packets
@@ -218,10 +228,10 @@ If all seven steps work, Phase 3 is done.
 
 - Real radio capture (hardware-dependent, Phase 4+)
 - Real ASR / Whisper integration (Phase 4+)
+- Scorer
 - UI scenario builder
 - Prompt versioning
 - Multi-run comparison
-- Authentication
 
 ---
 
