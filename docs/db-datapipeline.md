@@ -156,7 +156,7 @@ alembic upgrade head
 
 ---
 
-## Sub-phase 3.2 — Contracts Layer ✓
+## Sub-phase 3.2 — Contracts Layer
 
 ### Purpose
 
@@ -194,13 +194,12 @@ contracts/
 # contracts/models.py
 
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Any, Optional
 
 class TransmissionPacket(BaseModel):
     """Output of the capture stage. Input to preprocessing."""
     id: str
-    timestamp: str  # ISO8601 — capture doesn't need datetime arithmetic
+    timestamp: str
     talkgroup_id: int
     source_unit: Optional[int] = None
     frequency: float
@@ -212,7 +211,7 @@ class TransmissionPacket(BaseModel):
 class ProcessedPacket(BaseModel):
     """Output of preprocessing. Input to the TRM. Domain-agnostic."""
     id: str
-    timestamp: datetime  # Pydantic parses ISO8601 strings automatically
+    timestamp: str
     text: str
     metadata: dict[str, Any] = {}
 
@@ -240,10 +239,10 @@ Changes are mechanical — find/replace imports, verify tests still pass.
 
 ### Done When
 
-- `contracts/models.py` exists and is importable ✓
-- `src/models/packets.py` reconciled — re-exports from contracts ✓
-- No file imports boundary types from `src/models/` directly ✓
-- All tests pass (28 total: 23 existing + 5 new contracts tests) ✓
+- `contracts/models.py` exists and is importable
+- `src/models/packets.py` reconciled — `ProcessedPacket` and `ReadyPacket` definitions match contracts
+- No file imports boundary types from `src/models/` directly
+- All 16 tests still pass
 
 ---
 
@@ -265,15 +264,46 @@ Changes are mechanical — find/replace imports, verify tests still pass.
 
 Total wall time: ~4 minutes from first capture to last routed packet.
 
+### Pydantic ↔ ORM Mapping Convention
+
+Both scripts map between Pydantic types (from `contracts/`) and ORM models (from `db/`). Establish this pattern now so 3.3 follows the same convention.
+
+Use a `to_orm()` classmethod on each Pydantic model that returns the corresponding ORM instance:
+
+```python
+# In contracts/models.py
+class TransmissionPacket(BaseModel):
+    ...
+    def to_orm(self) -> "db.models.Transmission":
+        from db.models import Transmission
+        return Transmission(
+            id=self.id,
+            timestamp=self.timestamp,
+            talkgroup_id=self.talkgroup_id,
+            source_unit=self.source_unit,
+            frequency=self.frequency,
+            duration=self.duration,
+            encryption_status=self.encryption_status,
+            audio_path=self.audio_path,
+            status="captured",
+            text=None,
+        )
+```
+
+Same pattern applies to `RoutingRecord.to_orm()` in 3.3. Keeps mapping logic colocated with the type definition rather than scattered across scripts.
+
 ### Mock Capture Script
 
 Location: `capture/mock/run.py`
 
 **Behavior:**
-1. Reads `packets_radio.json`
-2. For each packet, writes a row to `transmissions` with `status = 'captured'`
-   - All capture fields populated from packet metadata
-   - `text` left null — preprocessing hasn't run yet
+1. Loads `packets_radio.json` into memory
+2. For each packet in order:
+   - Extracts capture fields — note that radio metadata fields (`talkgroup_id`, `source_unit`, `frequency`, `duration`, `encryption_status`, `audio_path`) are **nested under `metadata`** in the JSON and must be pulled out explicitly: `packet["metadata"]["talkgroup_id"]` etc.
+   - Constructs a `TransmissionPacket` (Pydantic) from the extracted fields
+   - Calls `transmission_packet.to_orm()` to get the ORM model
+   - Writes to `transmissions` with `status = 'captured'`, `text = null`
+   - Logs: `[CAPTURE] pkt_001 → captured (1/12)`
 3. Waits 10 seconds
 4. Moves to the next packet
 5. Exits after the last packet
@@ -282,24 +312,53 @@ Location: `capture/mock/run.py`
 python capture/mock/run.py
 ```
 
+**Logging format:**
+```
+[CAPTURE] 09:00:00 pkt_001 → captured (1/12)
+[CAPTURE] 09:00:10 pkt_002 → captured (2/12)
+...
+[CAPTURE] done — 12 packets written
+```
+
 ### Mock Preprocessing Script
 
 Location: `preprocessing/mock/run.py`
 
+**How it gets the text:** Capture writes rows with `text = null`. Preprocessing needs to fill it in, but it's only polling the DB — the text isn't there. On startup, preprocessing loads `packets_radio.json` and builds an `id → text` lookup dict. When it picks up a `captured` record, it looks up the text by packet id from that dict and writes it in.
+
+```python
+# On startup
+with open("data/tier_one/scenario_02_interleaved/packets_radio.json") as f:
+    packets = json.load(f)
+text_lookup = {p["id"]: p["text"] for p in packets}
+```
+
 **Behavior:**
-1. Polls `transmissions` for `status = 'captured'` rows every 2 seconds
-2. Flips status to `'processing'` immediately on pickup (prevents double-pickup)
-3. Waits 10 seconds (simulated ASR)
-4. Writes `text` from the source packet into the `transmissions` row
-5. Sets `asr_model = 'mock'`, `asr_confidence = 1.0`, `asr_passes = 1`
-6. Flips status to `'processed'`
-7. Continues polling until no `captured` or `processing` records remain, then exits
+1. Loads `packets_radio.json` and builds `id → text` lookup
+2. Polls `transmissions` for `status = 'captured'` rows every 2 seconds
+3. Flips status to `'processing'` immediately on pickup (prevents double-pickup)
+4. Logs: `[PREPROCESS] pkt_001 → processing...`
+5. Waits 10 seconds (simulated ASR)
+6. Looks up text from the dict, writes it to the `transmissions` row
+7. Sets `asr_model = 'mock'`, `asr_confidence = 1.0`, `asr_passes = 1`
+8. Flips status to `'processed'`
+9. Logs: `[PREPROCESS] pkt_001 → processed (text: 26 chars)`
+10. Continues polling until no `captured` or `processing` records remain, then exits
 
 ```bash
 python preprocessing/mock/run.py
 ```
 
-Both scripts run concurrently in separate terminals. Both import from `contracts/` for Pydantic types and from `db/` for ORM/session.
+**Logging format:**
+```
+[PREPROCESS] 09:00:02 pkt_001 → processing...
+[PREPROCESS] 09:00:12 pkt_001 → processed (text: 26 chars)
+[PREPROCESS] 09:00:12 pkt_002 → processing...
+...
+[PREPROCESS] done — all packets processed
+```
+
+Both scripts run concurrently in separate terminals. Both import from `contracts/` for Pydantic types and from `db/` for ORM/session. Use Python `logging` module throughout — not bare `print`.
 
 ### DB Reset
 
