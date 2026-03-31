@@ -416,7 +416,7 @@ class RoutingRecord(BaseModel):
 ```python
 # Pseudocode
 idle_cycles = 0
-MAX_IDLE = 10  # exit after ~20 seconds of nothing
+MAX_IDLE = 15  # exit after ~30 seconds of nothing — gives margin for slow pipeline start
 
 while True:
     async with AsyncSessionLocal() as session:
@@ -486,6 +486,8 @@ async def persist_routing_result(session, packet_id, record, context):
 
 **Critical:** Everything inside `session.begin()` is one transaction. If any write fails, nothing is committed and the packet status does not flip to `'routed'`. The next poll will pick it up and retry.
 
+**Known limitation:** `router.route()` calls `_apply()` internally, which mutates in-memory state before `persist_routing_result()` runs. If the DB write fails, in-memory state has already been updated — they will drift. This doesn't affect the mock pipeline but is a real consistency gap for production. Fixing it requires splitting `_apply()` out of `route()` so it can be called after persistence succeeds. Deferred consciously — tracked as an open problem in `docs/trm_runtime_loop.md`.
+
 ### Done When
 
 - Running `python src/main_live.py` with mock capture and preprocessing active routes all 12 packets
@@ -531,6 +533,8 @@ The WebSocket message format for live mode is the same as scenario runs — `pac
 ---
 
 ## Running a Full Simulation
+
+`main_live.py` requires `ANTHROPIC_API_KEY` set in `.env`. The mock capture and preprocessing scripts do not need it.
 
 ```bash
 # 1. Apply migrations (required before first run and after fresh clone)
