@@ -165,7 +165,7 @@ This becomes the seed data for the mock pipeline. It looks like real radio data.
 
 ---
 
-### Step 4 — Mock capture module
+### Step 4 — Mock capture module ✓
 
 A script in `capture/mock/` that reads the augmented packets and writes them to the database one at a time, with a configurable delay between packets, as if they were arriving from a live radio source.
 
@@ -173,17 +173,17 @@ Each packet written as a `transmissions` row with `status = 'captured'`. The tex
 
 Signaling mechanism for Phase 3: database polling. Simple, no extra infrastructure, inherently restartable. ZMQ push is deferred until real capture is built.
 
-**Done when:** Running the mock capture script populates the `transmissions` table with `status = 'captured'` rows, one by one, on a timer.
+**Done.** `capture/mock/run.py` reads `packets_radio.json`, constructs `TransmissionPacket` from metadata, calls `to_orm()`, writes to DB with `status = 'captured'` and `text = null`. 10s interval between packets.
 
 ---
 
-### Step 5 — Mock preprocessing module
+### Step 5 — Mock preprocessing module ✓
 
 A script in `preprocessing/mock/` that polls for `captured` records, simulates ASR processing time (configurable sleep, default 5–10 seconds), then writes the text back to the record and flips `status = 'processed'`.
 
 The text already exists in the augmented dataset — mock preprocessing just copies it into the `text` field. Also writes mock ASR metadata (`asr_model = 'mock'`, `asr_confidence = 1.0`, `asr_passes = 1`).
 
-**Done when:** Records that enter as `status = 'captured'` emerge as `status = 'processed'` with text populated, after a simulated delay.
+**Done.** `preprocessing/mock/run.py` loads `packets_radio.json` as a text lookup, polls for captured rows, flips to processing, waits 10s, writes text + ASR metadata, flips to processed. `db/reset.py` truncates all tables in FK-safe order.
 
 ---
 

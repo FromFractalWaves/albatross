@@ -15,6 +15,23 @@ class TransmissionPacket(BaseModel):
     audio_path: str
     metadata: dict[str, Any] = {}
 
+    def to_orm(self):
+        """Convert to SQLAlchemy Transmission model with status='captured'."""
+        from datetime import datetime as dt
+        from db.models import Transmission
+        return Transmission(
+            id=self.id,
+            timestamp=dt.fromisoformat(self.timestamp.replace("Z", "+00:00")),
+            talkgroup_id=self.talkgroup_id,
+            source_unit=self.source_unit,
+            frequency=self.frequency,
+            duration=self.duration,
+            encryption_status=self.encryption_status,
+            audio_path=self.audio_path,
+            status="captured",
+            text=None,
+        )
+
 
 class ProcessedPacket(BaseModel):
     """Output of preprocessing. Input to the TRM. Domain-agnostic."""

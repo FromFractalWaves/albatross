@@ -51,8 +51,9 @@
 
 ### Tests (`tests/`)
 
-- 28 tests total, all mocked (no API key needed)
+- 31 tests total, all mocked (no API key needed)
 - Contracts tests (5): import validation, TransmissionPacket construction, ReadyPacket alias, RoutingRecord string decisions, datetime parsing
+- Mock pipeline tests (3): capture writes, preprocessing updates, DB reset
 - Scenario endpoint tests (9): list, sort order, detail content, structure, 404 handling
 - Run/WebSocket tests (7): run creation, validation, full WebSocket integration (verifies message ordering, backlog delivery, end-to-end flow with mocked LLM)
 - Database model tests (7): imports, table creation, CRUD for all 5 models
@@ -73,10 +74,17 @@ albatross/
 │   │   └── runs.py           # POST /api/runs, WebSocket /ws/runs/{run_id}
 │   └── services/
 │       └── runner.py         # RunManager — wraps TRM pipeline, manages run state
+├── capture/
+│   └── mock/
+│       └── run.py            # Mock capture — reads packets_radio.json, writes to DB
+├── preprocessing/
+│   └── mock/
+│       └── run.py            # Mock preprocessing — polls captured rows, simulates ASR
 ├── db/
 │   ├── base.py               # DeclarativeBase
 │   ├── models.py             # Transmission, Thread, Event, ThreadEvent, RoutingRecord
 │   ├── session.py            # Async engine, session factory, get_session dependency
+│   ├── reset.py              # Truncates all data tables in FK-safe order
 │   └── migrations/
 │       ├── env.py            # Async Alembic config
 │       └── versions/         # Migration scripts
@@ -184,10 +192,9 @@ albatross/
 
 ## What's Next
 
-Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM) and 3.2 (contracts layer) are complete. Remaining:
+Phase 3 is in progress. Sub-phases 3.1 (DB schema + ORM), 3.2 (contracts layer), and 3.2b (mock pipeline + DB reset) are complete. Remaining:
 
-1. **Sub-phase 3.2b** — Mock capture + preprocessing scripts, DB reset utility
-2. **Sub-phase 3.3** — TRM persistence layer + `main_live.py` DB-driven entry point
-3. **Sub-phase 3.4** — UI hydration from database + live WebSocket updates
+1. **Sub-phase 3.3** — TRM persistence layer + `main_live.py` DB-driven entry point
+2. **Sub-phase 3.4** — UI hydration from database + live WebSocket updates
 
 Future (post Phase 3): Scorer, prompt iteration, real ASR integration
