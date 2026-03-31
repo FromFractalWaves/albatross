@@ -138,7 +138,7 @@ The radio dispatch intelligence pipeline is the first and currently only Albatro
 | TRM | Thread routing + event correlation on `ProcessedTransmissionPacket` objects |
 | Analysis | Incident summaries, timeline UI, daily reports |
 
-See `specs/radio_pipeline_spec.md` for the full implementation spec.
+See `docs/albatross_runtime_loop.md` for the full radio pipeline architecture and database design.
 
 ---
 
@@ -157,8 +157,14 @@ The Tier 1 golden dataset scenarios from the radio implementation are valid base
 
 ---
 
-## Status
+## Build History
 
-Albatross is being distilled from the radio pipeline project. The pattern is stable. The vocabulary is stable. The implementation details — base class structure, TRM configuration format, golden dataset tooling — are still being defined through the reference implementation.
+Albatross is built in phases. Each phase has its own document.
 
-This document will be updated as those details solidify.
+| Phase | Description | Status | Document |
+|-------|-------------|--------|----------|
+| **Phase 1** | TRM core — async packet pipeline, LLM-backed router, four Tier 1 scenarios | Complete | `docs/trm_spec.md`, `docs/trm_runtime_loop.md` |
+| **Phase 2** | Web UI + API — FastAPI backend, WebSocket streaming, Next.js dashboard | Complete | `docs/webui-api.md` |
+| **Phase 3** | Database + inter-module data pipeline — shared DB, contracts layer, mock pipeline, UI hydration | In progress | `docs/albatross_phase_3.md` |
+
+**Note on document naming:** Some documents use naming conventions from earlier in the project when scope was narrower. `docs/albatross_runtime_loop.md` is the architectural spec for the full radio pipeline and database design — it is the primary reference for Phase 3 despite its name. The phase numbering inside `docs/webui-api.md` (phases 1–6) refers to sub-phases of the web build, not Albatross-level phases.

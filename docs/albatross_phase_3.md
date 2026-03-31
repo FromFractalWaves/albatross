@@ -4,17 +4,29 @@
 
 ---
 
+## Mental Model
+
+Albatross is a staged pipeline:
+
+```
+Capture → Preprocessing → TRM → Analysis
+```
+
+Each stage enriches the same record and hands off to the next. Phase 3 introduces the shared database that makes this real — every stage reads from and writes to one place, and the UI reads from that same place on load.
+
+```
+capture/mock ──▶ DB ──▶ preprocessing/mock ──▶ DB ──▶ TRM ──▶ DB ──▶ UI
+```
+
+Without Phase 3, the system works but nothing persists. Refresh the page and state is gone. Phase 3 is what makes it a real pipeline instead of a demo.
+
+**Invariant:** A transmission's UUID is assigned at capture and never changed or replaced. Every stage enriches the same record under the same UUID. This is the backbone of the entire system — it means you can always trace a routing decision, a thread, or an event back to the original transmission.
+
+---
+
 ## Context
 
-### Albatross Phase Numbering
-
-| Phase | Description | Key Documents |
-|-------|-------------|---------------|
-| **Phase 1** | TRM core — async packet pipeline, LLM-backed router, scenario tooling | `docs/trm_spec.md`, `docs/trm_runtime_loop.md` |
-| **Phase 2** | Web UI + API — FastAPI backend, Next.js dashboard, WebSocket streaming | `docs/webui-api.md` (internal phases 1–6 are sub-phases of this) |
-| **Phase 3** | Database + inter-module data pipeline | This document |
-
-The phase numbering inside `webui-api.md` (phases 1–6) refers to sub-phases of the web build, not Albatross-level phases. The document `docs/albatross_runtime_loop.md` is the architectural spec for the full radio pipeline and database design, and is the primary reference for Phase 3 despite its name.
+See `docs/albatross.md` for the full Albatross phase history and document naming notes.
 
 ---
 
@@ -187,9 +199,11 @@ After each packet is routed:
 - Create or update row in `events`
 - Update `thread_events` join table
 
-The TRM also needs a DB-driven entry point — polling for `processed` records rather than consuming from `PacketLoader`. Scenario tooling is unaffected, it continues to use `PacketLoader` and in-memory state. The DB-driven path is a separate entry point.
+**Critical:** The DB write for each packet must be atomic. In-memory state and database state must not drift — if the DB write fails, the in-memory update should not be applied either. Consistency between the two is the invariant this step must preserve.
 
-**Done when:** A packet that enters as `status = 'processed'` emerges as `status = 'routed'`, with routing records, thread, and event rows written to the database.
+The TRM also needs a DB-driven entry point — polling for `processed` records rather than consuming from `PacketLoader`. Scenario tooling is unaffected; it continues to use `PacketLoader` and in-memory state. The DB-driven path is a separate entry point.
+
+**Done when:** A packet that enters as `status = 'processed'` emerges as `status = 'routed'`, with routing records, thread, and event rows written to the database. In-memory and DB state match after every packet.
 
 ---
 
