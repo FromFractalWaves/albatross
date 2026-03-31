@@ -165,6 +165,6 @@ Albatross is built in phases. Each phase has its own document.
 |-------|-------------|--------|----------|
 | **Phase 1** | TRM core — async packet pipeline, LLM-backed router, four Tier 1 scenarios | Complete | `docs/trm_spec.md`, `docs/trm_runtime_loop.md` |
 | **Phase 2** | Web UI + API — FastAPI backend, WebSocket streaming, Next.js dashboard | Complete | `docs/webui-api.md` |
-| **Phase 3** | Database + inter-module data pipeline — shared DB, contracts layer, mock pipeline, UI hydration | In progress | `docs/albatross_phase_3.md` |
+| **Phase 3** | Database + inter-module data pipeline — shared DB, contracts layer, mock pipeline, UI hydration | Complete | `docs/albatross_phase_3.md` |
 
 **Note on document naming:** Some documents use naming conventions from earlier in the project when scope was narrower. `docs/albatross_runtime_loop.md` is the architectural spec for the full radio pipeline and database design — it is the primary reference for Phase 3 despite its name. The phase numbering inside `docs/webui-api.md` (phases 1–6) refers to sub-phases of the web build, not Albatross-level phases.

@@ -502,7 +502,7 @@ async def persist_routing_result(session, packet_id, record, context):
 
 ### New API Endpoints
 
-Added to `api/routes/live.py`:
+`api/routes/live.py` — three GET endpoints registered at `/api` prefix:
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -510,25 +510,32 @@ Added to `api/routes/live.py`:
 | `GET` | `/api/live/events` | All open events with linked thread IDs |
 | `GET` | `/api/live/transmissions` | All routed transmissions ordered by timestamp |
 
-Response shapes mirror the existing TypeScript types in `web/src/types/trm.ts` so the frontend needs minimal changes.
+Response shapes mirror the existing TypeScript types in `web/src/types/trm.ts` so the frontend needs no type changes. Queries avoid N+1 — each endpoint runs 2–3 flat queries and assembles in Python.
+
+All endpoints use `Depends(get_session)` from `db/session.py`.
 
 ### Frontend Changes
 
-`web/src/app/live/page.tsx` — new page. On load:
-1. Fetches `/api/live/threads`, `/api/live/events`, `/api/live/transmissions`
-2. Reconstructs `TRMContext` from the response
-3. Renders the existing dashboard components (ThreadLane, EventCard, TimelineRow) — same components, different data source
-4. Opens WebSocket to receive new `packet_routed` messages as they arrive
-5. On `packet_routed`, merges the new routing record into local state
+`web/src/hooks/useLiveData.ts` — new hook. Fetches all three endpoints on mount, reconstructs `TRMContext` from responses, polls every 3 seconds for updates. Returns the same state shape as `useRunSocket` (`status`, `context`, `routingRecords`, `latestPacketId`, `error`).
 
-The WebSocket message format for live mode is the same as scenario runs — `packet_routed` with `context` and `incoming_packet`. The existing `useRunSocket` hook can be reused or extended.
+Live updates use client-side polling rather than WebSocket. The TRM (`main_live.py`) and API (`uvicorn`) run as separate processes with no IPC — the database is their only shared state. Polling at 3s satisfies the "within a few seconds" requirement. The REST endpoints built here become the hydration layer if a WebSocket push is added later.
+
+`web/src/app/live/page.tsx` — new page. Mirrors the run dashboard (`run/[runId]/page.tsx`) with these differences:
+- Uses `useLiveData()` instead of `useRunSocket(runId)`
+- No `IncomingBanner` or `BufferZone` — buffer state is transient TRM state, not persisted to DB
+- TopBar shows "Live Pipeline" with no speed factor
+- Same ThreadLane, EventCard, TimelineRow, TabBar, ContextInspector components
+
+`web/src/components/TopBar.tsx` — `speedFactor` prop made optional; hidden when null.
 
 ### Done When
 
 - `/live` page renders current DB state on load
 - Page refresh shows the same state — nothing lost
 - A second browser tab opened mid-run shows the same state as the first
-- New packets routed by the TRM appear in the UI within a few seconds via WebSocket
+- New packets routed by the TRM appear in the UI within a few seconds via polling
+
+**Done.** Three API endpoints in `api/routes/live.py`, `useLiveData` hook with 3s polling, `/live` page reusing all existing dashboard components. 7 new tests cover the endpoints (empty state, filtering, ordering, response shapes). 43 tests total.
 
 ---
 

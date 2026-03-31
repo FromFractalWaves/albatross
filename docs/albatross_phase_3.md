@@ -213,11 +213,11 @@ Update the web UI and API so that on page load, current state is read from the d
 New API endpoints:
 - `GET /api/live/threads` — all open threads with their packets
 - `GET /api/live/events` — all open events with linked threads
-- `GET /api/live/packets` — recent routing records
+- `GET /api/live/transmissions` — all routed transmissions ordered by timestamp
 
-On page load: fetch current state from these endpoints, render the dashboard. Then open WebSocket for live updates as new packets are routed. New packets push over WebSocket and also exist in the DB — the two are always in sync.
+On page load: fetch current state from these endpoints, render the dashboard. Live updates use client-side polling (3s interval) — the TRM and API run as separate processes with no IPC, so the DB is polled directly. The REST endpoints serve as the hydration layer if a WebSocket push is added later.
 
-**Done when:** Page refresh shows current state. A new browser tab opened mid-run shows the same state as the existing tab. The WebSocket is the live edge, the DB is the ground truth.
+**Done.** `api/routes/live.py` with three endpoints, `useLiveData` hook with 3s polling, `/live` page reusing existing dashboard components. 7 new tests, 43 total.
 
 ---
 

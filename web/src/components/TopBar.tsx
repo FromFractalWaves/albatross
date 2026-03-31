@@ -8,7 +8,7 @@ interface TopBarProps {
   packetsRouted: number;
   totalPackets: number | null;
   buffersRemaining: number;
-  speedFactor: number;
+  speedFactor?: number | null;
 }
 
 const STATUS_CONFIG: Record<RunStatus, { label: string; color: string }> = {
@@ -61,8 +61,12 @@ export function TopBar({
         <StatGroup label="packets" value={packetDisplay} />
         <Divider />
         <StatGroup label="buffers" value={String(buffersRemaining)} />
-        <Divider />
-        <StatGroup label="speed" value={`${speedFactor}×`} />
+        {speedFactor != null && (
+          <>
+            <Divider />
+            <StatGroup label="speed" value={`${speedFactor}×`} />
+          </>
+        )}
       </div>
     </div>
   );
