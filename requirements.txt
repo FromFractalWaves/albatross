@@ -1,0 +1,18 @@
+# Core
+anthropic
+pydantic
+
+# API
+fastapi
+uvicorn[standard]
+websockets
+
+# Database
+sqlalchemy[asyncio]
+aiosqlite
+alembic
+
+# Testing
+pytest
+pytest-asyncio
+httpx

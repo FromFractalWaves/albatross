@@ -4,7 +4,7 @@
 
 ---
 
-## Sub-phase 3.1 — Database Schema + ORM Setup ✅
+## Sub-phase 3.1 — Database Schema + ORM Setup ✓
 
 ### Stack
 
@@ -144,8 +144,6 @@ async def get_session() -> AsyncSession:
 
 ### Migrations
 
-Alembic is configured to use the async engine. `alembic init db/migrations` then configure `env.py` to import `Base.metadata` from `db/base.py`.
-
 ```bash
 # Create initial migration
 alembic revision --autogenerate -m "initial schema"
@@ -154,11 +152,7 @@ alembic revision --autogenerate -m "initial schema"
 alembic upgrade head
 ```
 
-### Done When
-
-- `alembic upgrade head` runs cleanly against SQLite
-- All five models are importable from `db/models.py`
-- A simple script can open a session, insert a `Transmission`, and query it back
+`albatross.db` is gitignored and gets recreated on `alembic upgrade head`. Any script that touches the database requires migrations to be applied first.
 
 ---
 
@@ -166,7 +160,25 @@ alembic upgrade head
 
 ### Purpose
 
-A single source of truth for the Pydantic types that cross module boundaries. Every module imports from `contracts/`, not from each other.
+A single source of truth for the Pydantic types that cross module boundaries. Every module imports boundary types from `contracts/`, not from each other.
+
+### What Goes in Contracts vs What Stays in src/
+
+This distinction matters. Not everything in `src/models/` is a boundary type.
+
+**Moves to `contracts/`** — types that cross stage boundaries:
+- `TransmissionPacket` — capture output, preprocessing input
+- `ProcessedPacket` — preprocessing output, TRM input
+- `ReadyPacket` — alias for `ProcessedPacket` once dequeued by TRM
+- `RoutingRecord` — TRM output, DB/analysis input
+
+**Stays in `src/models/`** — types that are TRM-internal only:
+- `Thread` — in-memory context state, includes `packets: list[ReadyPacket]` and `event_ids`
+- `Event` — in-memory context state
+- `TRMContext` — the full session state sent to the LLM each turn
+- `ThreadDecision` / `EventDecision` — enums used internally by the router
+
+The rule: if a type is only ever used inside the TRM, it stays in `src/`. If it crosses a stage boundary, it lives in `contracts/`.
 
 ### File Structure
 
@@ -177,8 +189,6 @@ contracts/
 ```
 
 ### Models
-
-These are largely already defined in `src/models/`. The contracts layer moves and clarifies them — it is not a rewrite.
 
 ```python
 # contracts/models.py
@@ -217,19 +227,32 @@ class RoutingRecord(BaseModel):
     event_id: Optional[str] = None
 ```
 
+### Files That Need Import Updates
+
+These files currently import packet or routing types from `src/models/` and need to be updated to import from `contracts/` instead:
+
+- `src/pipeline/router.py` — imports `ReadyPacket`, `RoutingRecord`
+- `api/services/runner.py` — imports `RoutingRecord`
+- `tests/conftest.py` and test mocks — any mock that constructs `ReadyPacket` or `RoutingRecord` directly
+
+Changes are mechanical — find/replace imports, verify tests still pass.
+
 ### Done When
 
 - `contracts/models.py` exists and is importable
-- `src/models/packets.py` and `src/models/router.py` are reconciled against these definitions (no conflicting shapes)
-- Nothing imports packet or routing types from `src/` directly — they come from `contracts/`
+- `src/models/packets.py` reconciled — `ProcessedPacket` and `ReadyPacket` definitions match contracts
+- No file imports boundary types from `src/models/` directly
+- All 16 tests still pass
 
 ---
 
 ## Sub-phase 3.2b — Synthetic Live Data & Mock Pipeline
 
+**Prerequisite:** `alembic upgrade head` must be run before starting any mock scripts. The database file is gitignored and will not exist in a fresh clone.
+
 ### Source Dataset
 
-`data/tier_one/scenario_02_interleaved/packets_radio.json` — already created. 12 packets, two interleaved conversations, TGID 1001 (bob/dylan) and TGID 1002 (sam/jose).
+`data/tier_one/scenario_02_interleaved/packets_radio.json` ✓ — already created. 12 packets, two interleaved conversations, TGID 1001 (bob/dylan) and TGID 1002 (sam/jose).
 
 ### Simulation Parameters
 
@@ -275,7 +298,7 @@ Location: `preprocessing/mock/run.py`
 python preprocessing/mock/run.py
 ```
 
-Both scripts run concurrently in separate terminals.
+Both scripts run concurrently in separate terminals. Both import from `contracts/` for Pydantic types and from `db/` for ORM/session.
 
 ### DB Reset
 
@@ -289,8 +312,6 @@ Truncates all data tables in FK-safe order. Does not drop or recreate schema.
 3. `transmissions`
 4. `threads`
 5. `events`
-
-Prints confirmation before truncating.
 
 ```bash
 python db/reset.py
@@ -328,27 +349,35 @@ while True:
 
 `db/persist_routing_result()` — called after every successful `router.route()` call. Must be atomic per packet.
 
+**Insertion order within the transaction matters** due to the circular FK between `events.opened_at` and `transmissions.id`:
+- `transmissions` must exist before `events.opened_at` can reference it
+- `threads` and `events` must exist before `transmissions.thread_id` / `transmissions.event_id` can reference them
+
+The safe order within each transaction:
+
 ```python
 async def persist_routing_result(session, packet_id, record, context):
     async with session.begin():
-        # 1. Upsert thread if new or existing
+        # 1. Upsert thread (threads.id must exist before transmissions.thread_id references it)
         if record.thread_decision in ('new', 'existing'):
             thread = get_thread_from_context(context, record.thread_id)
             await upsert_thread(session, thread)
 
-        # 2. Upsert event if new or existing
+        # 2. Upsert event WITHOUT opened_at first if it's new
+        #    (event needs to exist before transmissions.event_id references it,
+        #     but events.opened_at references transmissions which already exists)
         if record.event_decision in ('new', 'existing'):
             event = get_event_from_context(context, record.event_id)
             await upsert_event(session, event)
 
-        # 3. Upsert thread_events join if both present
+        # 3. Upsert thread_events join
         if record.thread_id and record.event_id:
             await upsert_thread_event(session, record.thread_id, record.event_id)
 
         # 4. Write routing record
         await insert_routing_record(session, record)
 
-        # 5. Update transmission
+        # 5. Update transmission — thread_id and event_id now have valid FK targets
         await update_transmission(session, packet_id, record)
 ```
 
@@ -400,7 +429,7 @@ The WebSocket message format for live mode is the same as scenario runs — `pac
 ## Running a Full Simulation
 
 ```bash
-# 1. Apply migrations
+# 1. Apply migrations (required before first run and after fresh clone)
 alembic upgrade head
 
 # 2. Reset the database (between runs)
