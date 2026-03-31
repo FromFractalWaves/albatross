@@ -1,0 +1,170 @@
+[
+  {
+    "id": "pkt_001",
+    "timestamp": "2024-01-15T09:00:00Z",
+    "text": "Dylan! How's it going man?",
+    "metadata": {
+      "speaker": "bob",
+      "talkgroup_id": 1001,
+      "source_unit": 4021,
+      "frequency": 851.0125,
+      "duration": 2.1,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_001.wav"
+    }
+  },
+  {
+    "id": "pkt_002",
+    "timestamp": "2024-01-15T09:00:07Z",
+    "text": "hey",
+    "metadata": {
+      "speaker": "sam",
+      "talkgroup_id": 1002,
+      "source_unit": 4055,
+      "frequency": 851.5125,
+      "duration": 0.8,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_002.wav"
+    }
+  },
+  {
+    "id": "pkt_003",
+    "timestamp": "2024-01-15T09:00:14Z",
+    "text": "Bob! Not bad, not bad. You?",
+    "metadata": {
+      "speaker": "dylan",
+      "talkgroup_id": 1001,
+      "source_unit": 4033,
+      "frequency": 851.0125,
+      "duration": 2.4,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_003.wav"
+    }
+  },
+  {
+    "id": "pkt_004",
+    "timestamp": "2024-01-15T09:00:19Z",
+    "text": "hey",
+    "metadata": {
+      "speaker": "jose",
+      "talkgroup_id": 1002,
+      "source_unit": 4061,
+      "frequency": 851.5125,
+      "duration": 0.8,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_004.wav"
+    }
+  },
+  {
+    "id": "pkt_005",
+    "timestamp": "2024-01-15T09:00:38Z",
+    "text": "Doing alright. Did you see the new timesheet policy they rolled out?",
+    "metadata": {
+      "speaker": "bob",
+      "talkgroup_id": 1001,
+      "source_unit": 4021,
+      "frequency": 851.0125,
+      "duration": 3.8,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_005.wav"
+    }
+  },
+  {
+    "id": "pkt_006",
+    "timestamp": "2024-01-15T09:00:51Z",
+    "text": "made a lemon pie last night, turned out really good",
+    "metadata": {
+      "speaker": "sam",
+      "talkgroup_id": 1002,
+      "source_unit": 4055,
+      "frequency": 851.5125,
+      "duration": 3.1,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_006.wav"
+    }
+  },
+  {
+    "id": "pkt_007",
+    "timestamp": "2024-01-15T09:01:04Z",
+    "text": "Oh I saw it. You have to log in fifteen minute increments now? Are they serious?",
+    "metadata": {
+      "speaker": "dylan",
+      "talkgroup_id": 1001,
+      "source_unit": 4033,
+      "frequency": 851.0125,
+      "duration": 4.2,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_007.wav"
+    }
+  },
+  {
+    "id": "pkt_008",
+    "timestamp": "2024-01-15T09:01:17Z",
+    "text": "oh nice, what kind of crust?",
+    "metadata": {
+      "speaker": "jose",
+      "talkgroup_id": 1002,
+      "source_unit": 4061,
+      "frequency": 851.5125,
+      "duration": 1.9,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_008.wav"
+    }
+  },
+  {
+    "id": "pkt_009",
+    "timestamp": "2024-01-15T09:01:33Z",
+    "text": "Dead serious. And Karen from HR has been going desk to desk checking that people are filling it out correctly. It's insane.",
+    "metadata": {
+      "speaker": "bob",
+      "talkgroup_id": 1001,
+      "source_unit": 4021,
+      "frequency": 851.0125,
+      "duration": 5.6,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_009.wav"
+    }
+  },
+  {
+    "id": "pkt_010",
+    "timestamp": "2024-01-15T09:01:44Z",
+    "text": "butter crust, did it from scratch. honestly thinking about doing a lemon blueberry pound cake next",
+    "metadata": {
+      "speaker": "sam",
+      "talkgroup_id": 1002,
+      "source_unit": 4055,
+      "frequency": 851.5125,
+      "duration": 4.7,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_010.wav"
+    }
+  },
+  {
+    "id": "pkt_011",
+    "timestamp": "2024-01-15T09:02:01Z",
+    "text": "Karen came by my desk twice yesterday. I just left the spreadsheet open and nodded at her.",
+    "metadata": {
+      "speaker": "dylan",
+      "talkgroup_id": 1001,
+      "source_unit": 4033,
+      "frequency": 851.0125,
+      "duration": 4.9,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_011.wav"
+    }
+  },
+  {
+    "id": "pkt_012",
+    "timestamp": "2024-01-15T09:02:19Z",
+    "text": "oh man do it, lemon blueberry pound cake goes so hard",
+    "metadata": {
+      "speaker": "jose",
+      "talkgroup_id": 1002,
+      "source_unit": 4061,
+      "frequency": 851.5125,
+      "duration": 3.3,
+      "encryption_status": false,
+      "audio_path": "out/wav/mock_pkt_012.wav"
+    }
+  }
+]
