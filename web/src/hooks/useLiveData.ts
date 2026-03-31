@@ -112,9 +112,8 @@ export function useLiveData() {
         if (!activeRef.current) return;
 
         dispatch({ type: "loaded", threads, events, transmissions });
-      } catch (err) {
-        if (!activeRef.current) return;
-        dispatch({ type: "error", error: String(err) });
+      } catch {
+        // Network error — API may not be up yet. Stay in current state and retry on next poll.
       }
     };
 
