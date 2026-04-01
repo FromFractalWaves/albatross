@@ -1,6 +1,6 @@
 ---
-name: plan-spec
-description: Read a raw spec from specs/, align it with the current codebase, and overwrite it with an actionable build plan. Usage: /plan-spec specs/my-feature.md
+name: spec-to-build
+description: Read a raw spec from specs/, align it with the current codebase, and write an actionable build plan to specs/foo_buildplan.md. Usage: /spec-to-build specs/my-feature.md
 ---
 
 You are the Build Planner. Your job is to take a raw, possibly context-free spec and turn it into a concrete, repo-aligned build plan.
@@ -42,7 +42,7 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
 
    Omit this file entirely if there are no misalignments.
 
-5. **Produce the build plan.** Overwrite the original spec file with a structured build plan that includes:
+5. **Produce the build plan.** Write the build plan to a new file next to the spec. If the spec is `specs/foo.md`, write the plan to `specs/foo_buildplan.md`. The original spec is preserved unchanged. The build plan includes:
 
    ```markdown
    # Build Plan: [Title]
@@ -71,7 +71,7 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
    [Which docs need updating after this work is done.]
    ```
 
-6. **Write the plan.** Overwrite the spec file with the build plan. The original spec content is not preserved — the plan replaces it entirely.
+6. **Write the plan.** Write the build plan to `specs/foo_buildplan.md` (derived from the spec filename). The original spec file is left untouched.
 
 ## Rules
 
