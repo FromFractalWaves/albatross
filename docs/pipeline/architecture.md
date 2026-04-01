@@ -10,7 +10,7 @@ This document traces the full lifecycle of a single radio transmission through t
 
 The reference implementation is a P25 Phase 1 trunked radio dispatch intelligence system. The capture layer is specific to P25/OP25. Everything from the `ProcessedPacket` boundary onward is domain-agnostic.
 
-For the TRM's internal per-packet decision loop, see `trm_runtime_loop.md`. This document covers the pipeline around it.
+For the TRM's internal per-packet decision loop, see `docs/trm/runtime_loop.md`. This document covers the pipeline around it.
 
 ---
 
@@ -107,7 +107,7 @@ The original audio and capture metadata are untouched. The record grows.
 
 **What happens:** The processed packet enters the TRM queue and is routed.
 
-The TRM pulls the `ProcessedTransmissionPacket` as a `ReadyPacket`. The existing runtime loop executes: full session context serialized to JSON, sent to the LLM, routing decision parsed, state updated. See `trm_runtime_loop.md` for the internal loop.
+The TRM pulls the `ProcessedTransmissionPacket` as a `ReadyPacket`. The existing runtime loop executes: full session context serialized to JSON, sent to the LLM, routing decision parsed, state updated. See `docs/trm/runtime_loop.md` for the internal loop.
 
 The TRM does not know this is a radio packet. It sees `id`, `timestamp`, `text`, and `metadata`. The metadata carries talkgroup_id, source_unit, etc. — but the TRM treats these as opaque routing signals weighted by configuration, not as radio-specific concepts.
 

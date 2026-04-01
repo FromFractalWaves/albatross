@@ -44,6 +44,6 @@ Report anything suspicious even if you're not 100% sure it's stale.
 
 - **Read before writing.** Always read the current file content before editing. Never edit based on memory alone.
 - **Don't expand scope.** If a doc is intentionally concise, keep it concise. Don't add sections or detail that wasn't there before.
-- **Preserve voice.** Each doc has a tone. `CLAUDE.md` is terse and instructional. `trm_outline.md` is a status snapshot. `webui-api.md` is a detailed plan. Match the style.
+- **Preserve voice.** Each doc has a tone. `CLAUDE.md` is terse and instructional. `docs/pipeline/database.md` is a technical reference. `docs/web/api.md` is an architecture overview. Match the style.
 - **Don't touch code.** You only edit `.md` files. If you find a code issue, mention it in your report but don't fix it.
 - **Be honest about uncertainty.** If you can't tell whether something is stale or intentionally forward-looking, flag it rather than changing it.

@@ -14,7 +14,7 @@ Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for 
 
 ## Current Phase
 
-**Phase 3 — Database & Inter-Module Data Pipeline** is complete. See `docs/albatross_phase_3.md` for the plan and `docs/db-datapipeline.md` for implementation specs.
+**Phase 3 — Database & Inter-Module Data Pipeline** is complete. See `docs/pipeline/database.md` for schema, contracts, and mock pipeline reference.
 
 Phases 1 (TRM core), 2 (Web UI + API), and 3 (DB + data pipeline) are complete. The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has 4 boundary types with `to_orm()` mapping to ORM models. Mock capture (`capture/mock/run.py`) and preprocessing (`preprocessing/mock/run.py`) scripts simulate the full pipeline. `trm/main_live.py` is the DB-driven TRM entry point — polls for processed rows and persists routing results. The `/live` page hydrates from the database on load via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) and polls every 3 seconds for updates.
 
@@ -146,19 +146,17 @@ Scenarios live under `data/tier_one/`, `data/tier_two/`, etc. Each scenario fold
 
 Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interleaved`, `scenario_03_event_opens_mid_thread`, `scenario_04_three_way_split`.
 
-The augmented dataset for the Phase 3 mock pipeline lives at `data/tier_one/scenario_02_interleaved/packets_radio.json` — same packets with radio metadata added. See `docs/db-datapipeline.md` for details.
+The augmented dataset for the Phase 3 mock pipeline lives at `data/tier_one/scenario_02_interleaved/packets_radio.json` — same packets with radio metadata added. See `docs/pipeline/database.md` for details.
 
 ## Docs
 
 | Document | Description |
 |----------|-------------|
 | `docs/albatross.md` | Start here — the Albatross pattern, pipeline stages, phase history |
-| `docs/albatross_phase_3.md` | Phase 3 plan — DB, contracts layer, mock pipeline, UI hydration |
-| `docs/db-datapipeline.md` | Phase 3 implementation specs — synthetic data, simulation parameters, reset |
-| `docs/albatross_runtime_loop.md` | Full radio pipeline architecture and DB schema (primary Phase 3 reference) |
-| `docs/trm_spec.md` | TRM spec — packet types, routing decisions, golden dataset tiers, scoring |
-| `docs/trm_runtime_loop.md` | TRM runtime loop — context schema, per-packet decision cycle, buffering |
-| `docs/trm_outline.md` | TRM current state and key design decisions |
-| `docs/webui-api.md` | Web UI & API build plan — six sub-phases, all complete |
-| `docs/ui_spec.md` | Visual design spec — design tokens, components, layout |
-| `docs/ui_mockup.jsx` | Interactive React mockup — component reference |
+| `docs/pipeline/architecture.md` | Full radio pipeline architecture — DB schema, stage handoffs, production TRM requirements |
+| `docs/pipeline/database.md` | Database & data pipeline — ORM models, contracts layer, mock pipeline, persistence |
+| `docs/trm/spec.md` | TRM spec — packet types, routing decisions, golden dataset tiers, scoring |
+| `docs/trm/runtime_loop.md` | TRM runtime loop — context schema, per-packet decision cycle, buffering |
+| `docs/web/api.md` | Web UI & API architecture — REST endpoints, WebSocket protocol, frontend pages |
+| `docs/web/ui_spec.md` | Visual design spec — design tokens, components, layout |
+| `docs/web/ui_mockup.jsx` | Interactive React mockup — component reference |

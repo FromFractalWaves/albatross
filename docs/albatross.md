@@ -138,7 +138,7 @@ The radio dispatch intelligence pipeline is the first and currently only Albatro
 | TRM | Thread routing + event correlation on `ProcessedTransmissionPacket` objects |
 | Analysis | Incident summaries, timeline UI, daily reports |
 
-See `docs/albatross_runtime_loop.md` for the full radio pipeline architecture and database design.
+See `docs/pipeline/architecture.md` for the full radio pipeline architecture and database design.
 
 ---
 
@@ -163,10 +163,8 @@ Albatross is built in phases. Each phase has its own document.
 
 | Phase | Description | Status | Document |
 |-------|-------------|--------|----------|
-| **Phase 1** | TRM core — async packet pipeline, LLM-backed router, four Tier 1 scenarios | Complete | `docs/trm_spec.md`, `docs/trm_runtime_loop.md` |
-| **Phase 2** | Web UI + API — FastAPI backend, WebSocket streaming, Next.js dashboard | Complete | `docs/webui-api.md` |
-| **Phase 3** | Database + inter-module data pipeline — shared DB, contracts layer, mock pipeline, UI hydration | Mostly complete | `docs/albatross_phase_3.md` |
+| **Phase 1** | TRM core — async packet pipeline, LLM-backed router, four Tier 1 scenarios | Complete | `docs/trm/spec.md`, `docs/trm/runtime_loop.md` |
+| **Phase 2** | Web UI + API — FastAPI backend, WebSocket streaming, Next.js dashboard | Complete | `docs/web/api.md` |
+| **Phase 3** | Database + inter-module data pipeline — shared DB, contracts layer, mock pipeline, UI hydration | Complete | `docs/pipeline/database.md` |
 | **Phase 4** | UI — live mode, scorer, tuning workflow, prompt editor | Not started | — |
 | **Phase 5** | Data integration — real capture, ASR, radio hardware | Not started (hardware-gated) | — |
-
-**Note on document naming:** Some documents use naming conventions from earlier in the project when scope was narrower. `docs/albatross_runtime_loop.md` is the architectural spec for the full radio pipeline and database design — it is the primary reference for Phase 3 despite its name. The phase numbering inside `docs/webui-api.md` (phases 1–6) refers to sub-phases of the web build, not Albatross-level phases.
