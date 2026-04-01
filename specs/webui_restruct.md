@@ -1,168 +1,87 @@
-# Albatross Web UI — Restructure Spec
+# Build Plan: Web UI Restructure
 
+_Generated from spec — aligned with repo on 2026-04-01_
 
----
+## Goal
 
-## Overview
+Restructure the web UI around a homepage hub that separates TRM Tools from Live Data, add mock pipeline API controls, and fix UI labeling/theme issues.
 
-The current web UI has two pages:
+## Context
 
-- `/` — scenario runner (TRM tools)
-- `/live` — live data view (structurally similar to `/`, runs against live data)
+The frontend is a Next.js 16 / React 19 app in `web/` with Tailwind CSS v4. Current routes:
 
-This spec restructures the UI around a **homepage hub** that clearly separates two domains:
+- `/` (`web/src/app/page.tsx`) — Scenario hub with HubTopBar, fetches from `/api/scenarios`, links to scenario detail pages. Already has a TabBar with SCENARIOS (active), LIVE (disabled), HISTORY (disabled).
+- `/live` (`web/src/app/live/page.tsx`) — Live pipeline view using `useLiveData` hook (polls `/api/live/*` every 3s). Three tabs: LIVE, EVENTS, TIMELINE.
+- `/run/[runId]` (`web/src/app/run/[runId]/page.tsx`) — Live run visualization via WebSocket.
+- `/scenarios/[tier]/[scenario]` — Scenario detail page, launches runs.
 
-1. **TRM Tools** — offline, controlled, workbench for tuning the TRM
-2. **Live Data** — real-time, stream-fed, pipeline visualization
+State management is `useReducer` + `useState` — no Zustand. Two custom hooks: `useRunSocket.ts` (WebSocket) and `useLiveData.ts` (polling). 13 components in `web/src/components/`.
 
-These are fundamentally different in data source, update pattern, and purpose. Mixing them or treating them as the same page creates long-term confusion. The split should be made now before the UI grows further.
+Backend is FastAPI (`api/main.py`) with three route modules: `scenarios.py`, `runs.py`, `live.py`. Mock pipeline is three CLI scripts (`capture/mock/run.py`, `preprocessing/mock/run.py`, `trm/main_live.py`) with no API control surface.
 
----
+## Plan
 
-## Route Structure
+### Step 1: Create homepage hub at `/`
 
-### Current
-```
-/           → scenario runner
-/live       → live data (mirrors /)
-```
+**Files:** `web/src/app/page.tsx` (rewrite), `web/src/components/HubTopBar.tsx` (modify)
 
-### Target
-```
-/           → homepage (hub/router)
-/trm        → TRM Tools (moved from /)
-/live       → Live Data (remains, receives structural improvements)
-```
+Replace the current scenario-listing homepage with a minimal hub page. Two large cards linking to `/trm` and `/live`. No data fetching. Dark themed, consistent with existing design tokens in `web/src/app/globals.css`.
 
----
+Update `HubTopBar.tsx`: change display text from "TRM" to "Albatross" and subtitle from "Thread Routing Module" to a short project tagline or remove the subtitle.
 
-## Homepage (`/`)
+### Step 2: Move scenario hub to `/trm`
 
-A simple hub page. No data fetching. Two clearly labeled entry points.
+**Files:** `web/src/app/trm/page.tsx` (new — current `page.tsx` content moves here), `web/src/app/scenarios/[tier]/[scenario]/page.tsx` (update back-link from `/` to `/trm`)
 
-**Layout:** Two large cards or sections side by side (or stacked on mobile):
+Move the entire current homepage (scenario listing, TabBar, tier cards) to `/trm/page.tsx`. Update the back-link in the scenario detail page from `/` to `/trm`. Check `web/src/app/run/[runId]/page.tsx` for any navigation back to `/` that should point to `/trm`.
 
-### Card 1 — TRM Tools
-- **Label:** `TRM Tools`
-- **Description:** Scenario runner, scoring, prompt tuning, golden dataset management, domain adaptation. Everything needed to evaluate and improve the TRM.
-- **Link:** `/trm`
+### Step 3: UI label corrections
 
-### Card 2 — Live Data
-- **Label:** `Live Data`
-- **Description:** Real-time pipeline visualization. Thread lanes, event stream, packet timeline. Connects to live or mock radio data source.
-- **Link:** `/live`
+**Files:** `web/src/components/TopBar.tsx`, `web/src/components/HubTopBar.tsx`, `web/src/app/layout.tsx`
 
-**Design notes:**
-- Dark theme consistent with existing UI (`docs/ui_spec.md` design tokens)
-- Header should read `Albatross` (not `TRM`) — see Corrections section
-- Minimal — this is a router, not a dashboard
+- `TopBar.tsx` line 53: change "TRM" brand text to "Albatross".
+- `HubTopBar.tsx` line 4/6: already handled in Step 1.
+- `layout.tsx`: update page title and meta description from "TRM — Thread Routing Module" to "Albatross".
+- `TopBar.tsx`: remove the buffer counter display from the stats section when used on the `/live` page. Either accept a prop to hide it, or remove it from TopBar and let the run page show buffer state via BufferZone only.
 
----
+### Step 4: Dark/light theme toggle
 
-## TRM Tools (`/trm`)
+**Files:** `web/src/app/globals.css` (add light theme variables), `web/src/app/layout.tsx` (apply theme class), `web/src/components/TopBar.tsx` (add toggle button), `web/src/components/HubTopBar.tsx` (add toggle button)
 
-This is the existing `/` page, moved. No functional changes in this spec — just route migration.
+Add CSS custom properties for a light theme alongside the existing dark values. Use a `dark`/`light` class on `<html>` to switch. Store preference in `localStorage`, default to dark. Add a simple sun/moon toggle icon to both TopBar and HubTopBar. Use `useState` initialized from `localStorage` — no state library needed.
 
-**Contains (existing):**
-- Scenario selector
-- Scenario runner / live run visualization
-- Thread lanes
-- Events view
-- Chronological timeline
-- Decision badges
-- Scoring display
+### Step 5: Mock pipeline API endpoints
 
-**Subagent alignment task:** Verify all internal links, API calls, and WebSocket connections that currently reference `/` are updated to `/trm`. Check `web/` for any hardcoded routes.
+**Files:** `api/routes/mock.py` (new), `api/main.py` (mount new router)
 
----
+Create three endpoints:
 
-## Live Data (`/live`)
+- `POST /api/mock/start` — Launches the three mock pipeline scripts (`capture/mock/run.py`, `preprocessing/mock/run.py`, `trm/main_live.py`) as subprocesses via `asyncio.create_subprocess_exec`. Store process handles in app state (similar to how `app.state.run_manager` works). Reset the DB first via `db/reset.py` logic (truncate tables). Return `{status: "started"}`.
+- `POST /api/mock/stop` — Terminates the subprocess handles. Return `{status: "stopped"}`.
+- `GET /api/mock/status` — Return `{status: "running" | "stopped"}` based on whether subprocesses are alive.
 
-The existing `/live` page receives two changes in this spec:
+The scripts already have auto-exit logic (idle timeouts), so the stop endpoint is for early termination. Each script runs in its own subprocess with the project venv's Python.
 
-### 1. Mock Pipeline API Endpoint
+### Step 6: Live page mock pipeline controls
 
-The mock pipeline (`capture/mock/run.py`, `preprocessing/mock/run.py`, `trm/main_live.py`) currently runs as a set of CLI scripts. This spec adds a FastAPI endpoint to start and stop a mock run so it can be triggered from the UI.
+**Files:** `web/src/app/live/page.tsx` (modify)
 
-**New API endpoints:**
+Add a control bar at the top of the `/live` page with:
+- A "Start Mock Pipeline" button that calls `POST /api/mock/start`
+- A "Stop" button that calls `POST /api/mock/stop`
+- A status indicator that polls `GET /api/mock/status` (or reads it after start/stop responses)
 
-```
-POST /api/mock/start    → starts the mock pipeline (capture → preprocessing → TRM)
-POST /api/mock/stop     → stops the mock pipeline
-GET  /api/mock/status   → returns running | stopped
-```
+This lets the user trigger a full mock pipeline run from the browser and watch data flow into the live view.
 
-**Behavior:**
-- The mock pipeline replays a scenario augmented with full radio metadata, simulating live capture
-- It feeds into the same DB and WebSocket path as real live data
-- The `/live` page can trigger a mock run via these endpoints without leaving the browser
-- This validates the full live data path end-to-end before real radio hardware is available
+## Testing
 
-**Subagent alignment task:** Review `capture/mock/run.py`, `preprocessing/mock/run.py`, and `trm/main_live.py` to understand process lifecycle. Determine whether subprocess management (e.g. `asyncio.create_subprocess_exec`) or a shared process registry is appropriate. Check `api/main.py` for existing patterns.
+- **Route tests**: Verify `/trm` serves the scenario list, `/` serves the hub. Check that `/scenarios/[tier]/[scenario]` back-link points to `/trm`. These are manual browser checks or could be light Playwright tests if the project adds them later.
+- **Mock pipeline API tests**: Add tests in `tests/` following the existing pattern (e.g., `tests/test_live_api.py` uses `httpx.AsyncClient` with `app`). Test `POST /api/mock/start` returns 200, `GET /api/mock/status` returns running, `POST /api/mock/stop` returns stopped. Mock `asyncio.create_subprocess_exec` to avoid actually launching scripts in tests.
+- **Existing tests**: Run `python -m pytest tests/ -v` to confirm nothing breaks. The 9 scenario endpoint tests reference `/api/scenarios` which is unchanged. The 7 live API tests reference `/api/live/*` which is unchanged.
 
-### 2. UI Hydration from DB
+## Doc Updates
 
-On page load, `/live` fetches existing thread and packet data from the DB to populate the view before the WebSocket stream takes over. This is the remaining sub-phase from `docs/albatross_phase_3.md`.
-
-**Behavior:**
-- On mount: single DB fetch via API to hydrate thread list and recent packets into Zustand store
-- After hydration: WebSocket connection opens and feeds new data into the same store
-- No polling — push only after initial load
-
-**Subagent alignment task:** Review `docs/albatross_phase_3.md` for hydration requirements and `docs/db-datapipeline.md` for hydration query design. Verify Zustand store shape matches DB contract types in `contracts/`.
-
----
-
-## UI Corrections
-
-Small fixes to be applied globally or per-component:
-
-| # | Location | Issue | Fix |
-|---|----------|-------|-----|
-| 1 | Top-left header / nav | Reads `TRM` | Change to `Albatross` |
-| 2 | Top-right | Buffer counter displayed globally | Remove — buffers are per-packet, not a global pipeline stat. Buffer state is visible in individual packet/decision views only. |
-| 3 | Theme | Light/dark mode not implemented | Add dark/light toggle. Default: dark. Persist preference in Zustand (localStorage via persist middleware). |
-
-**Subagent alignment task:** Search `web/` for all instances of the string `TRM` used as a display label (not a technical term). Distinguish between label usage (fix) and code/type references (do not change).
-
----
-
-## Zustand Store Notes
-
-The UI already uses Zustand (or should — verify in `web/`). For this spec:
-
-- **UI state** (theme preference, selected scenario, active view): Zustand with `persist` middleware → `localStorage`
-- **Live data** (threads, packets, transmissions): Zustand without persist — hydrated from DB on mount, then fed by WebSocket. No stale data on refresh; always re-hydrates from DB.
-
----
-
-## What This Spec Does NOT Include
-
-To keep scope clean:
-
-- No changes to TRM core logic
-- No changes to DB schema or ORM models
-- No changes to WebSocket protocol
-- No new analysis views or visualization features
-- No radio capture integration (deferred until hardware available)
-- No TanStack Query migration (future consideration when cache invalidation complexity is warranted)
-
----
-
-## Subagent Instructions
-
-This spec is intended to be consumed by a Claude Code subagent. Before producing a build plan, the subagent must:
-
-1. Read all referenced docs: `docs/ui_spec.md`, `docs/webui-api.md`, `docs/albatross_phase_3.md`, `docs/db-datapipeline.md`
-2. Read `CLAUDE.md` for project conventions
-3. Inspect `web/` directory structure and identify current route files
-4. Inspect `api/main.py` for existing endpoint patterns
-5. Inspect `contracts/` for shared types used at the UI/API boundary
-6. Resolve any naming or structural drift between this spec and the actual codebase
-7. Flag any conflicts or ambiguities before generating the build plan
-
-**Output:** A phased build plan with sub-phases, each with:
-- Clear scope boundary
-- Files to create or modify
-- Doc update checkpoint at phase end
-- Acceptance criteria
+- `CLAUDE.md` — Update the Frontend section: new route structure (`/`, `/trm`, `/live`), mention mock pipeline API endpoints, update component descriptions (HubTopBar now says Albatross, TopBar rebranded).
+- `docs/web/api.md` — Add mock pipeline endpoints (`/api/mock/start`, `/stop`, `/status`). Update route table.
+- `docs/web/ui_spec.md` — Update with light/dark theme toggle, new homepage layout, Albatross branding.
+- `docs/albatross.md` — Note the UI restructure in the phase history section.

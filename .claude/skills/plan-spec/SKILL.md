@@ -24,7 +24,25 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
    - Architectural assumptions that conflict with how the project actually works
    - Missing dependencies or prerequisites the spec doesn't mention
 
-4. **Produce the build plan.** Overwrite the original spec file with a structured build plan that includes:
+4. **Write misalignments report.** If there are any misalignments, write them to a separate file next to the spec. If the spec is `specs/foo.md`, write misalignments to `specs/foo_misalignments.md`. This file is for the user to review — it is not part of the build plan. Format:
+
+   ```markdown
+   # Misalignments: [Title]
+
+   _Spec: `specs/foo.md` — reviewed against repo on [date]_
+
+   ## [Category]
+   - **Spec says:** [what the spec assumed]
+   - **Repo reality:** [what actually exists]
+   - **Resolution:** [how the build plan handles it]
+
+   ## [Category]
+   ...
+   ```
+
+   Omit this file entirely if there are no misalignments.
+
+5. **Produce the build plan.** Overwrite the original spec file with a structured build plan that includes:
 
    ```markdown
    # Build Plan: [Title]
@@ -36,9 +54,6 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
 
    ## Context
    [What already exists in the repo that this builds on. Reference actual file paths.]
-
-   ## Misalignments Resolved
-   [Bullet list of what the original spec got wrong or assumed incorrectly, and how the plan corrects it. Omit this section if there were none.]
 
    ## Plan
 
@@ -56,7 +71,7 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
    [Which docs need updating after this work is done.]
    ```
 
-5. **Write the plan.** Overwrite the spec file with the build plan. The original spec content is not preserved — the plan replaces it entirely.
+6. **Write the plan.** Overwrite the spec file with the build plan. The original spec content is not preserved — the plan replaces it entirely.
 
 ## Rules
 
