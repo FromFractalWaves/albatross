@@ -84,11 +84,30 @@ The `packet_routed` message includes `incoming_packet` as a top-level sibling fi
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/mock/start` | Reset DB and launch mock pipeline subprocesses (capture, preprocessing, TRM) |
-| `POST` | `/api/mock/stop` | Terminate running mock pipeline subprocesses |
+| `POST` | `/api/mock/start` | Reset DB and start in-process mock pipeline |
+| `POST` | `/api/mock/stop` | Cancel running mock pipeline |
 | `GET` | `/api/mock/status` | Check if mock pipeline is running — returns `{"status": "running" \| "stopped"}` |
 
-The start endpoint resets all DB tables, then launches `capture/mock/run.py`, `preprocessing/mock/run.py`, and `trm/main_live.py` as subprocesses. Process handles are stored in `app.state.mock_processes`. The scripts have built-in idle timeouts, so the stop endpoint is for early termination.
+The start endpoint resets all DB tables, then starts the pipeline as an in-process asyncio task via `LivePipelineManager`. The pipeline runs three concurrent stages (capture, preprocessing, routing) connected by async queues, writing to the DB at each stage and broadcasting progress over WebSocket.
+
+#### WebSocket — Live Pipeline
+
+| Path | Description |
+|------|-------------|
+| `ws://localhost:8000/ws/live/mock` | Live stream of pipeline stage messages |
+
+After starting the pipeline via `POST /api/mock/start`, the frontend opens a WebSocket connection. The backend pushes stage-level messages:
+
+| Type | When |
+|------|------|
+| `pipeline_started` | Pipeline begins — includes `total_packets` |
+| `packet_captured` | Packet written to DB — includes `packet_id`, `timestamp`, `metadata` |
+| `packet_preprocessed` | ASR complete — includes `packet_id`, `text` |
+| `packet_routed` | TRM routing complete — includes `routing_record`, `context`, `incoming_packet` |
+| `pipeline_complete` | All packets processed — includes `routing_records` |
+| `pipeline_error` | Something broke — includes `error` |
+
+Clients connecting mid-pipeline receive the full message backlog. The `packet_routed` message has the same shape as the scenario WebSocket's `packet_routed`.
 
 > For the full mock pipeline reference — stages, status progression, timing, API response shapes, and frontend integration — see `docs/pipeline/mock_pipeline.md`.
 
@@ -108,7 +127,7 @@ The start endpoint resets all DB tables, then launches `capture/mock/run.py`, `p
 
 **`/run/{run_id}` — Live Run View.** The main screen. During a run: incoming packet highlighted, active threads as columns/lanes with packets stacking, active events with thread links, routing decision badge, buffered packets in a holding area, buffer counter.
 
-**`/live/[source]` — Live Pipeline.** DB-hydrated dashboard, dynamic by source. Mock pipeline controls (Start/Stop buttons, status indicator) shown when source is "mock". Same components as the run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3 seconds via `useLiveData` hook.
+**`/live/[source]` — Live Pipeline.** WebSocket-driven dashboard, dynamic by source. Mock pipeline controls (Start/Stop buttons, status indicator) shown when source is "mock". Same components as the run page. Hydrates from REST via TanStack Query on load, then receives real-time updates via WebSocket at `/ws/live/mock`.
 
 #### Key UI Components
 
@@ -129,9 +148,10 @@ api/                        # FastAPI backend
 │   ├── scenarios.py        # Scenario listing and detail endpoints
 │   ├── runs.py             # Run control + WebSocket
 │   ├── live.py             # DB-hydrated live endpoints
-│   └── mock.py             # Mock pipeline start/stop/status
+│   └── mock.py             # Mock pipeline start/stop/status + live WebSocket
 └── services/
-    └── runner.py           # Wraps TRM pipeline — starts runs, manages state
+    ├── runner.py           # Wraps TRM pipeline — starts runs, manages state
+    └── live_pipeline.py    # In-process mock pipeline with WebSocket broadcast
 
 web/                        # Next.js frontend
 └── src/

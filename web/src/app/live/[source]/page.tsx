@@ -25,7 +25,7 @@ export default function LivePage({
   params: Promise<{ source: string }>;
 }) {
   const { source } = use(params);
-  const { status, context, routingRecords, latestPacketId } = useLiveData();
+  const { status, context, routingRecords, latestPacketId, incomingPacket } = useLiveData();
 
   const [activeTab, setActiveTab] = useState<Tab>("live");
   const [pipelineStatus, setPipelineStatus] = useState<"running" | "stopped" | "unknown">("unknown");
@@ -214,7 +214,7 @@ export default function LivePage({
         </div>
 
         {/* Context Inspector */}
-        <ContextInspector context={context} incomingPacket={null} />
+        <ContextInspector context={context} incomingPacket={incomingPacket} />
       </div>
     </div>
   );

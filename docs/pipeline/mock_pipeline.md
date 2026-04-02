@@ -6,37 +6,44 @@
 
 ## 1. Overview
 
-The mock live pipeline simulates a full radio dispatch data flow: **Capture → Preprocessing → TRM Routing → DB → Live UI**. Three Python scripts run as subprocesses, each writing to a shared SQLite database. The frontend polls REST endpoints to hydrate state from that database.
+The mock live pipeline simulates a full radio dispatch data flow: **Capture → Preprocessing → TRM Routing → DB + WebSocket → Live UI**. The pipeline runs in-process inside the API as three concurrent async stages connected by `PacketQueue`s. The frontend receives real-time updates via WebSocket and hydrates from the database on page load.
 
 ```
 packets_radio.json
         │
         ▼
-┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
-│ capture/     │     │ preprocessing/   │     │ trm/         │
-│ mock/run.py  │────▶│ mock/run.py      │────▶│ main_live.py │
-│              │     │                  │     │              │
-│ status:      │     │ status:          │     │ status:      │
-│  "captured"  │     │  "processing"    │     │  "routing"   │
-│              │     │  "processed"     │     │  "routed"    │
-└──────────────┘     └──────────────────┘     └──────────────┘
-                                                      │
-                                                      ▼
-                                              ┌──────────────┐
-                                              │ SQLite DB    │
-                                              │ (5 tables)   │
-                                              └──────┬───────┘
-                                                     │
-                                    ┌────────────────┼────────────────┐
-                                    ▼                ▼                ▼
-                             GET /threads     GET /events     GET /transmissions
-                                    │                │                │
-                                    └────────────────┼────────────────┘
-                                                     ▼
-                                              ┌──────────────┐
-                                              │ Live Page    │
-                                              │ (3s polling) │
-                                              └──────────────┘
+┌──────────────────────────────────────────────────────┐
+│ LivePipelineManager (api/services/live_pipeline.py)  │
+│                                                      │
+│  Capture Stage ──▶ Preprocessing ──▶ Routing Stage   │
+│  (PacketQueue)     (PacketQueue)     (TRMRouter)     │
+│                                                      │
+│  DB writes at each stage:                            │
+│  "captured" → "processing" → "processed" → "routed"  │
+│                                                      │
+│  WebSocket broadcast at each stage:                  │
+│  packet_captured → packet_preprocessed →             │
+│  packet_routed                                       │
+└──────────────────────────────────────────────────────┘
+        │                                  │
+        ▼                                  ▼
+┌──────────────┐                  ┌────────────────┐
+│ SQLite DB    │                  │ ws://localhost  │
+│ (5 tables)   │                  │ :8000/ws/live/  │
+│              │                  │ mock            │
+└──────┬───────┘                  └───────┬────────┘
+       │                                  │
+       ▼                                  ▼
+ REST hydration                   Real-time push
+ (page load/refresh)              (TanStack Query
+                                   cache updates)
+       │                                  │
+       └──────────────┬───────────────────┘
+                      ▼
+               ┌──────────────┐
+               │ Live Page    │
+               │ (WebSocket)  │
+               └──────────────┘
 ```
 
 ---
@@ -51,15 +58,39 @@ captured → processing → processed → routing → routed
 
 | Status | Set by | Meaning |
 |--------|--------|---------|
-| `captured` | `capture/mock/run.py` | Row inserted, `text` is null |
-| `processing` | `preprocessing/mock/run.py` | Preprocessing claimed it, prevents double-pickup |
-| `processed` | `preprocessing/mock/run.py` | ASR done, `text` + ASR metadata written |
-| `routing` | `trm/main_live.py` | TRM claimed it, prevents double-pickup |
-| `routed` | `db/persist.py` (called by TRM) | Routing complete, thread/event/record persisted |
+| `captured` | Capture stage | Row inserted, `text` is null |
+| `processing` | Preprocessing stage | Preprocessing claimed it |
+| `processed` | Preprocessing stage | ASR done, `text` + ASR metadata written |
+| `routing` | Routing stage | TRM claimed it |
+| `routed` | `db/persist.py` (called by routing stage) | Routing complete, thread/event/record persisted |
 
 ---
 
-## 3. Stage 1 — Capture (`capture/mock/run.py`)
+## 3. Pipeline Manager (`api/services/live_pipeline.py`)
+
+`LivePipelineManager` orchestrates the pipeline as a single asyncio task with three concurrent stages. It is a singleton stored on `app.state.live_pipeline_manager`.
+
+**Lifecycle**:
+1. `POST /api/mock/start` → `manager.start(session_factory)` → resets DB, spawns pipeline task
+2. Pipeline runs three stages via `asyncio.gather()`, broadcasting WebSocket messages at each step
+3. `POST /api/mock/stop` → `manager.stop()` → cancels the task
+
+**WebSocket messages** (broadcast in order):
+
+| Message Type | When | Payload |
+|-------------|------|---------|
+| `pipeline_started` | Pipeline begins | `total_packets` |
+| `packet_captured` | Packet written to DB | `packet_id`, `timestamp`, `metadata` |
+| `packet_preprocessed` | ASR complete | `packet_id`, `text` |
+| `packet_routed` | TRM routing complete | `packet_id`, `routing_record`, `context`, `incoming_packet` |
+| `pipeline_complete` | All packets done | `total_packets`, `routing_records` |
+| `pipeline_error` | Error occurred | `error` |
+
+Late-joining WebSocket clients receive the full message backlog on connect.
+
+---
+
+## 4. Stage 1 — Capture
 
 **Source data**: `data/tier_one/scenario_02_interleaved/packets_radio.json`
 
@@ -68,51 +99,44 @@ captured → processing → processed → routing → routed
 2. For each packet, builds a `TransmissionPacket` (contracts model) from the JSON fields: `id`, `timestamp`, plus metadata fields (`talkgroup_id`, `source_unit`, `frequency`, `duration`, `encryption_status`, `audio_path`).
 3. Calls `tp.to_orm()` which returns a `Transmission` ORM object with `status="captured"` and `text=None`.
 4. Writes the ORM object to the DB.
-5. Sleeps **10 seconds** before the next packet (except after the last one).
-
-**Timing**: ~10s per packet. For 20 packets, capture takes ~190s.
-
-**Key detail**: `to_orm()` parses the ISO8601 timestamp string into a `datetime` via `fromisoformat()`, replacing `Z` with `+00:00`.
+5. Broadcasts `packet_captured` message.
+6. Puts packet data on the capture queue for the preprocessing stage.
+7. Sleeps **10 seconds** before the next packet (except after the last one).
+8. Sends `None` sentinel on the queue when done.
 
 ---
 
-## 4. Stage 2 — Preprocessing (`preprocessing/mock/run.py`)
+## 5. Stage 2 — Preprocessing
 
 **What it does**:
-1. At startup, builds a `text_lookup` dict mapping `packet_id → text` from the same JSON file.
-2. Polls every **2 seconds** for one row with `status="captured"` (LIMIT 1).
-3. If found:
-   - Immediately sets `status="processing"` and commits (prevents double-pickup).
-   - Sleeps **10 seconds** (simulated ASR).
-   - Re-fetches the row by `packet_id`.
+1. At startup, a `text_lookup` dict mapping `packet_id → text` is built from the same JSON file.
+2. Consumes packets from the capture queue (no polling — direct queue consumption).
+3. For each packet:
+   - Sets `status="processing"` in DB.
+   - Sleeps **3 seconds** (simulated ASR).
    - Writes: `text` (from lookup), `asr_model="mock"`, `asr_confidence=1.0`, `asr_passes=1`.
    - Sets `status="processed"`.
-4. If no `captured` rows found:
-   - Checks for any `processing` rows (in-flight work). If found, resets idle counter and continues.
-   - If no in-flight work either, increments idle counter.
-   - After **3 consecutive idle cycles**, exits.
-
-**Timing**: 2s poll + 10s ASR delay per packet. Runs concurrently with capture.
+   - Broadcasts `packet_preprocessed` message.
+   - Builds a `ReadyPacket` and puts it on the routing queue.
+4. Forwards `None` sentinel when capture is done.
 
 ---
 
-## 5. Stage 3 — TRM Routing (`trm/main_live.py`)
+## 6. Stage 3 — TRM Routing
 
 **What it does**:
 1. Creates a `TRMRouter(buffers=5)`.
-2. Polls every **2 seconds** for one row with `status="processed"` (ordered by timestamp, LIMIT 1).
-3. If found:
-   - Sets `status="routing"` and commits (prevents double-pickup).
-   - Builds a `ReadyPacket` from the transmission fields: `id`, `timestamp` (as string), `text`, `metadata` dict with `talkgroup_id`, `source_unit`, `frequency`, `duration`.
+2. Consumes `ReadyPacket`s from the routing queue.
+3. For each packet:
+   - Sets `status="routing"` in DB.
    - Calls `await router.route(ready_packet)` — sends full TRMContext to Claude, gets back a `RoutingRecord`.
    - Calls `await persist_routing_result(session, packet_id, record, router.context)`.
-4. If no `processed` rows, increments idle counter. After **10 consecutive idle cycles** (~20s), exits.
-
-**Routing**: The `route()` call sends the entire `TRMContext` (all active threads, events, buffer, and the incoming packet) as JSON to Claude Sonnet. The response is parsed into a `RoutingRecord` with `thread_decision`, `thread_id`, `event_decision`, `event_id`.
+   - Broadcasts `packet_routed` message with routing record and full context snapshot.
+4. After all packets: pipeline broadcasts `pipeline_complete`.
 
 ---
 
-## 6. Atomic Persistence (`db/persist.py`)
+## 7. Atomic Persistence (`db/persist.py`)
 
 `persist_routing_result(session, packet_id, record, context)` writes everything in one transaction, in FK-safe order:
 
@@ -126,7 +150,7 @@ All within `async with session.begin()`.
 
 ---
 
-## 7. Database Schema
+## 8. Database Schema
 
 **5 tables** managed by SQLAlchemy 2.0 async ORM (`db/models.py`), migrated via Alembic.
 
@@ -142,21 +166,20 @@ Engine: `sqlite+aiosqlite:///./albatross.db` (default). Session: `AsyncSessionLo
 
 ---
 
-## 8. API Layer
+## 9. API Layer
 
 ### Mock Pipeline Control (`api/routes/mock.py`)
 
-Registered at `/api/mock`.
-
 | Endpoint | Behavior |
 |----------|----------|
-| `POST /api/mock/start` | Stops existing processes, calls `reset_db()` (truncates all tables), launches 3 subprocesses (`capture/mock/run.py`, `preprocessing/mock/run.py`, `trm/main_live.py`) via `asyncio.create_subprocess_exec()`. Stores handles in `app.state.mock_processes`. Returns `{"status": "started"}`. |
-| `POST /api/mock/stop` | Terminates all processes (5s grace, then kill). Clears process list. Returns `{"status": "stopped"}`. |
-| `GET /api/mock/status` | Returns `{"status": "running"}` if any process has `returncode is None`, else `{"status": "stopped"}`. |
+| `POST /api/mock/start` | Calls `manager.start(AsyncSessionLocal)` — stops any existing pipeline, resets DB, starts new in-process pipeline task. Returns `{"status": "started"}`. |
+| `POST /api/mock/stop` | Calls `manager.stop()` — cancels the pipeline task. Returns `{"status": "stopped"}`. |
+| `GET /api/mock/status` | Returns `{"status": "running"}` if pipeline task is active, else `{"status": "stopped"}`. |
+| `ws://localhost:8000/ws/live/mock` | WebSocket endpoint. Accepts connection, sends backlog, then streams live pipeline messages. |
 
 ### Live Data Endpoints (`api/routes/live.py`)
 
-Registered at `/api/live`.
+Registered at `/api/live`. These serve as the **hydration layer** — the frontend fetches them on page load or refresh, then WebSocket messages keep the state current.
 
 **`GET /api/live/threads`** — All threads with `status="open"`. For each thread, fetches routed transmissions (joined by `thread_id`, ordered by timestamp) and event IDs (via `thread_events` join). Response shape per thread:
 ```json
@@ -171,49 +194,21 @@ Registered at `/api/live`.
 }
 ```
 
-**`GET /api/live/events`** — All events with `status="open"`. Includes linked thread IDs. Response shape per event:
-```json
-{
-  "event_id": "evt_001",
-  "label": "Traffic stop on Main St",
-  "opened_at": "pkt_003",
-  "thread_ids": ["thr_001", "thr_002"],
-  "status": "open"
-}
-```
+**`GET /api/live/events`** — All events with `status="open"`. Includes linked thread IDs.
 
-**`GET /api/live/transmissions`** — All transmissions with `status="routed"`, ordered by timestamp. Includes decision fields and metadata. Response shape per transmission:
-```json
-{
-  "id": "pkt_001",
-  "timestamp": "2024-01-15T09:00:00+00:00",
-  "text": "Dylan! How's it going man?",
-  "status": "routed",
-  "thread_id": "thr_001",
-  "event_id": null,
-  "thread_decision": "new",
-  "event_decision": "none",
-  "metadata": {
-    "talkgroup_id": 1001,
-    "source_unit": 4021,
-    "frequency": 851.0125,
-    "duration": 2.1,
-    "encryption_status": false
-  }
-}
-```
+**`GET /api/live/transmissions`** — All transmissions with `status="routed"`, ordered by timestamp. Includes decision fields and metadata.
 
 ---
 
-## 9. Frontend — Live Page
+## 10. Frontend — Live Page
 
 ### Page (`web/src/app/live/[source]/page.tsx`)
 
 Dynamic route where `source` is e.g. `"mock"`. Three tabs: **LIVE**, **EVENTS**, **TIMELINE**.
 
 **Mock pipeline controls** (shown only when `source === "mock"`):
-- Polls `GET /api/mock/status` every 3000ms.
-- Start button → `POST /api/mock/start` (resets DB + launches scripts).
+- Polls `GET /api/mock/status` every 3000ms for status indicator.
+- Start button → `POST /api/mock/start` (resets DB + starts pipeline).
 - Stop button → `POST /api/mock/stop`.
 - Green pulsing dot when running.
 
@@ -222,53 +217,44 @@ Dynamic route where `source` is e.g. `"mock"`. Three tabs: **LIVE**, **EVENTS**,
 - **EVENTS**: `EventCard` per active event. Shows event label, `opened_at` timestamp, linked thread badges (colored).
 - **TIMELINE**: All packets from all threads, flattened and sorted by packet ID. `TimelineRow` per packet.
 
-**Computed state**:
-- `threadColorMap`: Maps `thread_id` → hex color (6-color rotating palette from `threadColors.ts`).
-- `decisionMap`: Maps `packet_id` → `{thread_decision, event_decision, thread_id, event_id}` (from `packetDecisions.ts`).
-- Latest packet highlighted with colored left border.
-
 ### Hook (`web/src/hooks/useLiveData.ts`)
 
-**Polling interval**: 3000ms.
+Uses **TanStack Query** for data management and **WebSocket** for real-time push.
 
-**Per poll cycle**:
-1. Fetches all 3 endpoints in parallel via `Promise.all()`.
-2. Reconstructs `TRMContext`:
-   ```typescript
-   {
-     active_threads: threads,       // from /api/live/threads
-     active_events: events,         // from /api/live/events
-     packets_to_resolve: [],        // always empty (no buffer visibility)
-     buffers_remaining: 5,          // hardcoded
-   }
-   ```
-3. Builds `RoutingRecord[]` from transmissions that have `thread_decision` set.
-4. Sets `latestPacketId` from last transmission.
+**Hydration** (on mount / page refresh):
+- `useQuery` fetches `/api/live/threads`, `/events`, `/transmissions`.
+- When WebSocket is connected, polling is disabled. Otherwise, fallback poll every 5s.
 
-**Status values**: `"loading"` → `"empty"` (no data) or `"ready"` (has data). `"error"` on fetch failure (retries next poll).
+**WebSocket push** (real-time updates):
+- Connects to `ws://localhost:8000/ws/live/mock`.
+- On `packet_routed`: updates TanStack Query caches with context and routing record from the message.
+- On `pipeline_complete`: invalidates all queries to re-fetch final state from DB.
+- Auto-reconnects on disconnect with 2s backoff.
 
-**Note**: Network errors don't crash — they're silently ignored, and the next poll retries. Uses `activeRef` to prevent state updates after unmount.
+**Return shape**:
+```typescript
+{ status, context, routingRecords, latestPacketId, incomingPacket, error }
+```
 
 ---
 
-## 10. Timing Summary
+## 11. Timing Summary
 
 | Component | Interval | Exit Condition |
 |-----------|----------|----------------|
-| Capture script | 10s between packets | All packets emitted |
-| Preprocessing poll | 2s | 3 consecutive idle cycles |
-| Preprocessing ASR delay | 10s per packet | — |
-| TRM poll | 2s | 10 consecutive idle cycles (~20s) |
-| Frontend live data poll | 3s | Page unmount |
+| Capture stage | 10s between packets | All packets emitted |
+| Preprocessing ASR delay | 3s per packet | — |
+| Routing | Immediate (queue-driven) | All packets routed |
+| Frontend WebSocket | Real-time push | Page unmount |
 | Frontend mock status poll | 3s | Page unmount |
 
-**End-to-end latency per packet**: ~10s capture gap + ~10s ASR + TRM routing time (LLM call, ~2-5s). Frontend sees it on next poll (up to 3s). Total: ~25s from capture to UI visibility.
+**End-to-end latency per packet**: ~10s capture gap + ~3s ASR + TRM routing time (LLM call, ~2-5s). Frontend sees it immediately via WebSocket push. Total: ~15-18s from capture to UI visibility.
 
-**Full dataset runtime**: ~4 minutes for 20 packets (dominated by capture interval + ASR delay).
+**Full dataset runtime**: ~2 minutes for 12 packets (dominated by capture interval + LLM routing time).
 
 ---
 
-## 11. Source Data
+## 12. Source Data
 
 **File**: `data/tier_one/scenario_02_interleaved/packets_radio.json`
 
@@ -294,15 +280,28 @@ The `text` field is used by preprocessing (looked up by packet ID). The `speaker
 
 ---
 
-## 12. Test Coverage
+## 13. Standalone Scripts
 
-49 tests total, all passing. Key test files for this pipeline:
+The original subprocess scripts still exist for manual/standalone usage outside the API:
+
+- `capture/mock/run.py` — Writes packets to DB on 10s intervals.
+- `preprocessing/mock/run.py` — Polls DB for captured rows, simulates ASR.
+- `trm/main_live.py` — Polls DB for processed rows, routes + persists.
+
+These are **not** called by the API — the in-process pipeline replaces them for the live UI workflow.
+
+---
+
+## 14. Test Coverage
+
+55 tests total, all passing. Key test files for this pipeline:
 
 | File | Tests | Covers |
 |------|-------|--------|
+| `tests/test_live_pipeline.py` | 6 | Pipeline manager lifecycle, message collection/ordering, WebSocket backlog, multi-client |
+| `tests/test_mock_api.py` | 6 | Mock start/stop/status via LivePipelineManager |
 | `tests/test_mock_pipeline.py` | 3 | Capture→DB, preprocessing status transitions, DB reset |
 | `tests/test_trm_persistence.py` | 5 | `persist_routing_result()` atomic writes, FK ordering, partial decisions |
 | `tests/test_live_api.py` | 7 | All 3 live endpoints — filtering by status, response shapes, ordering |
-| `tests/test_mock_api.py` | 6 | Mock start/stop/status, process management, restart behavior |
 | `tests/test_db.py` | 7 | ORM model CRUD, table creation, FK relationships |
 | `tests/test_contracts.py` | 5 | Boundary types, `to_orm()` methods, type aliases |
