@@ -162,6 +162,7 @@ The augmented dataset for the Phase 3 mock pipeline lives at `data/tier_one/scen
 | `docs/pipeline/database.md` | Database & data pipeline — ORM models, contracts layer, mock pipeline, persistence |
 | `docs/trm/spec.md` | TRM spec — packet types, routing decisions, golden dataset tiers, scoring |
 | `docs/trm/runtime_loop.md` | TRM runtime loop — context schema, per-packet decision cycle, buffering |
+| `docs/trm/scenarios.md` | Scenarios system — data layer, API, service layer, web UI, end-to-end flow |
 | `docs/web/api.md` | Web UI & API architecture — REST endpoints, WebSocket protocol, frontend pages |
 | `docs/web/ui_spec.md` | Visual design spec — design tokens, components, layout |
 | `docs/web/ui_mockup.jsx` | Interactive React mockup — component reference |
