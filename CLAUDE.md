@@ -108,6 +108,7 @@ FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `trm/
 - **`api/routes/scenarios.py`** — `GET /api/scenarios` (list), `GET /api/scenarios/{tier}/{scenario}` (detail). Reads directly from the `data/` directory.
 - **`api/routes/runs.py`** — `POST /api/runs` (start a run), `ws://localhost:8000/ws/runs/{run_id}` (live stream).
 - **`api/routes/live.py`** — `GET /api/live/threads` (open threads with packets), `GET /api/live/events` (open events with thread IDs), `GET /api/live/transmissions` (routed transmissions ordered by timestamp). All use `Depends(get_session)` for DB access.
+- **`api/routes/mock.py`** — `POST /api/mock/start` (reset DB + launch pipeline subprocesses), `POST /api/mock/stop` (terminate subprocesses), `GET /api/mock/status` (check if running). Process handles stored in `app.state.mock_processes`.
 - **`api/services/runner.py`** — `RunManager` orchestrates runs as background asyncio tasks, broadcasts `run_started`, `packet_routed`, `run_complete` messages over WebSocket. Runs are in-memory (no persistence yet). The `packet_routed` message includes `context` (with `incoming_packet` popped out) and `incoming_packet` as a sibling field. Clients connecting mid-run receive the full message backlog.
 
 ### Frontend (`web/`)
@@ -118,16 +119,18 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 - **`web/src/types/websocket.ts`** — Discriminated union for WebSocket messages: `RunStarted`, `PacketRouted`, `RunComplete`, `RunError`.
 - **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, error, scenario }`.
 - **`web/src/hooks/useLiveData.ts`** — Custom hook for the live page. Fetches `/api/live/threads`, `/events`, `/transmissions` on mount, reconstructs `TRMContext`, polls every 3s. Returns `{ status, context, routingRecords, latestPacketId, error }`.
+- **`web/src/hooks/useTheme.ts`** — Dark/light theme toggle hook. Reads/writes `localStorage`, toggles `dark`/`light` class on `<html>`. SSR-safe.
 - **`web/src/lib/`** — `utils.ts` (cn helper), `threadColors.ts` (rotating color palette for threads), `packetDecisions.ts` (joins routing records to packets by ID), `api.ts` (API_BASE and WS_BASE constants).
-- **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`, `HubTopBar`, `TabBar`.
-- **`web/src/app/page.tsx`** — Scenario hub: lists tiers and scenarios, links to detail pages.
-- **`web/src/app/scenarios/[tier]/[scenario]/page.tsx`** — Scenario detail: README, packet list, expected output, run config, launches run.
+- **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`, `HubTopBar`, `TabBar`, `ThemeToggle`.
+- **`web/src/app/page.tsx`** — Homepage hub: two cards linking to `/trm` (TRM Tools) and `/live` (Live Data).
+- **`web/src/app/trm/page.tsx`** — Scenario hub: lists tiers and scenarios, links to detail pages.
+- **`web/src/app/scenarios/[tier]/[scenario]/page.tsx`** — Scenario detail: README, packet list, expected output, run config, launches run. Back-link to `/trm`.
 - **`web/src/app/run/[runId]/page.tsx`** — Live run dashboard: LIVE (thread lanes), EVENTS (event cards), TIMELINE (chronological list). Incoming packet banner, buffer zone, decision badges, context inspector.
-- **`web/src/app/live/page.tsx`** — DB-hydrated live dashboard. Same components as run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3s for updates.
+- **`web/src/app/live/page.tsx`** — DB-hydrated live dashboard with mock pipeline controls (Start/Stop/Status). Same components as run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3s for updates.
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 43 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), and live API endpoints (7 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 49 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), and mock pipeline API (6 tests).
 
 ### Key Design Decisions
 

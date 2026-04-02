@@ -1,4 +1,5 @@
 import { Badge } from "./Badge";
+import { ThemeToggle } from "./ThemeToggle";
 
 type RunStatus = "idle" | "connecting" | "running" | "complete" | "error";
 
@@ -9,6 +10,7 @@ interface TopBarProps {
   totalPackets: number | null;
   buffersRemaining: number;
   speedFactor?: number | null;
+  hideBuffers?: boolean;
 }
 
 const STATUS_CONFIG: Record<RunStatus, { label: string; color: string }> = {
@@ -41,6 +43,7 @@ export function TopBar({
   totalPackets,
   buffersRemaining,
   speedFactor,
+  hideBuffers,
 }: TopBarProps) {
   const statusConfig = STATUS_CONFIG[status];
   const packetDisplay = totalPackets !== null
@@ -50,7 +53,7 @@ export function TopBar({
   return (
     <div className="sticky top-0 z-50 flex items-center justify-between px-5 py-3 border-b border-border bg-surface">
       <div className="flex items-center gap-3.5">
-        <span className="text-sm font-bold text-text-primary tracking-tight">TRM</span>
+        <span className="text-sm font-bold text-text-primary tracking-tight">Albatross</span>
         <Divider />
         {scenarioName && (
           <span className="text-xs text-text-muted">{scenarioName}</span>
@@ -59,14 +62,20 @@ export function TopBar({
       </div>
       <div className="flex items-center gap-3">
         <StatGroup label="packets" value={packetDisplay} />
-        <Divider />
-        <StatGroup label="buffers" value={String(buffersRemaining)} />
+        {!hideBuffers && (
+          <>
+            <Divider />
+            <StatGroup label="buffers" value={String(buffersRemaining)} />
+          </>
+        )}
         {speedFactor != null && (
           <>
             <Divider />
             <StatGroup label="speed" value={`${speedFactor}×`} />
           </>
         )}
+        <Divider />
+        <ThemeToggle />
       </div>
     </div>
   );

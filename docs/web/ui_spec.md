@@ -6,9 +6,9 @@
 
 ## Design Direction
 
-Data-dense dark dashboard. Think Grafana/Datadog — designed for watching structured state evolve in real time without eye strain. Prioritizes information density and clarity over decoration.
+Data-dense dashboard with dark/light theme toggle. Think Grafana/Datadog — designed for watching structured state evolve in real time. Prioritizes information density and clarity over decoration. Default theme is dark; users can toggle to light via a sun/moon button in the top bar. Preference persists in `localStorage`.
 
-**Stack:** Next.js + TypeScript, shadcn/ui components, Tailwind CSS.
+**Stack:** Next.js + TypeScript, Tailwind CSS v4.
 
 ---
 
@@ -66,7 +66,7 @@ The dashboard is a single-page view with a fixed top bar and a scrollable conten
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ TOP BAR                                                      │
-│ [TRM] | scenario_name | ● running    packets 10/12 | buf 5 │
+│ [Albatross] | scenario_name | ● running  packets 10/12 | ☀ │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │ ┌─ INCOMING PACKET BANNER ────────────────────────────────┐ │
@@ -105,7 +105,7 @@ The dashboard is a single-page view with a fixed top bar and a scrollable conten
 Fixed at the top. Displays run metadata at a glance.
 
 **Left side:**
-- "TRM" wordmark — 14px, bold, `text.primary`
+- "Albatross" wordmark — 14px, bold, `text.primary`
 - Vertical divider
 - Scenario name — 12px, `text.muted`
 - Status badge — "● running" (green), "● complete" (blue), "● error" (red)

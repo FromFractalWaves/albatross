@@ -82,17 +82,29 @@ Message types:
 
 The `packet_routed` message includes `incoming_packet` as a top-level sibling field (popped from the context snapshot). The frontend never polls — everything is pushed.
 
+#### REST Endpoints — Mock Pipeline
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/mock/start` | Reset DB and launch mock pipeline subprocesses (capture, preprocessing, TRM) |
+| `POST` | `/api/mock/stop` | Terminate running mock pipeline subprocesses |
+| `GET` | `/api/mock/status` | Check if mock pipeline is running — returns `{"status": "running" \| "stopped"}` |
+
+The start endpoint resets all DB tables, then launches `capture/mock/run.py`, `preprocessing/mock/run.py`, and `trm/main_live.py` as subprocesses. Process handles are stored in `app.state.mock_processes`. The scripts have built-in idle timeouts, so the stop endpoint is for early termination.
+
 ### Frontend (Next.js + TypeScript)
 
 #### Pages
 
-**`/` — Scenario Hub.** Lists all scenarios grouped by tier, fetched from `GET /api/scenarios`. Tabs for SCENARIOS (active), LIVE, HISTORY. Links to individual scenario detail pages.
+**`/` — Homepage Hub.** Minimal landing page with two cards linking to `/trm` (TRM Tools) and `/live` (Live Data). No data fetching.
+
+**`/trm` — Scenario Hub.** Lists all scenarios grouped by tier, fetched from `GET /api/scenarios`. Tabs for SCENARIOS (active), LIVE, HISTORY. Links to individual scenario detail pages.
 
 **`/run/{run_id}` — Live Run View.** The main screen. During a run: incoming packet highlighted, active threads as columns/lanes with packets stacking, active events with thread links, routing decision badge, buffered packets in a holding area, buffer counter.
 
-**`/scenarios/{tier}/{scenario}` — Scenario Detail.** Shows README, packet list, expected output (collapsible), run configuration (speed factor, buffer count). "Run This Scenario" button launches a run and redirects to the live view.
+**`/scenarios/{tier}/{scenario}` — Scenario Detail.** Shows README, packet list, expected output (collapsible), run configuration (speed factor, buffer count). "Run This Scenario" button launches a run and redirects to the live view. Back-link points to `/trm`.
 
-**`/live` — Live Pipeline.** DB-hydrated dashboard. Same components as the run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3 seconds via `useLiveData` hook.
+**`/live` — Live Pipeline.** DB-hydrated dashboard with mock pipeline controls (Start/Stop buttons, status indicator). Same components as the run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3 seconds via `useLiveData` hook.
 
 #### Key UI Components
 
@@ -112,7 +124,8 @@ api/                        # FastAPI backend
 ├── routes/
 │   ├── scenarios.py        # Scenario listing and detail endpoints
 │   ├── runs.py             # Run control + WebSocket
-│   └── live.py             # DB-hydrated live endpoints
+│   ├── live.py             # DB-hydrated live endpoints
+│   └── mock.py             # Mock pipeline start/stop/status
 └── services/
     └── runner.py           # Wraps TRM pipeline — starts runs, manages state
 
@@ -120,7 +133,7 @@ web/                        # Next.js frontend
 └── src/
     ├── app/                # Next.js app router pages
     ├── components/         # React components
-    ├── hooks/              # useRunSocket, useLiveData
+    ├── hooks/              # useRunSocket, useLiveData, useTheme
     ├── lib/                # Utilities, constants, color palette
     └── types/              # TypeScript types mirroring Pydantic models
 ```

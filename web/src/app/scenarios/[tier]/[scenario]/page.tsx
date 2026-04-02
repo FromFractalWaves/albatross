@@ -70,7 +70,7 @@ export default function ScenarioDetailPage({
       <div className="max-w-4xl mx-auto px-5 py-4 flex flex-col gap-4">
         {/* Back link */}
         <Link
-          href="/"
+          href="/trm"
           className="text-[11px] font-mono uppercase tracking-[0.06em] text-text-muted hover:text-text-secondary transition-colors"
         >
           ← Back to Scenarios

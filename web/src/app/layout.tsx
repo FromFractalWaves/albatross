@@ -9,8 +9,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TRM — Thread Routing Module",
-  description: "Live WebSocket view of TRM routing decisions",
+  title: "Albatross",
+  description: "Albatross pipeline intelligence dashboard",
 };
 
 export default function RootLayout({
@@ -19,7 +19,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={jetbrainsMono.variable}>
+    <html lang="en" className={`${jetbrainsMono.variable} dark`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='light'){document.documentElement.classList.remove('dark');document.documentElement.classList.add('light')}}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
