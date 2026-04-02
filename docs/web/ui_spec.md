@@ -219,9 +219,9 @@ Collapsible panel at the bottom of the content area.
 
 The chevron rotates 180° when expanded (CSS transition, 0.2s ease).
 
-### Buffer Zone (future)
+### Buffer Zone
 
-Not visible in the mockup since scenario_02 doesn't use buffers, but when `packets_to_resolve` is non-empty:
+Shown on the run page (`/run/[runId]`) when `packets_to_resolve` is non-empty:
 
 - A dedicated section between the incoming banner and the tab bar
 - Header: "BUFFERED PACKETS" with count badge

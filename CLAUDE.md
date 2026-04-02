@@ -14,11 +14,11 @@ Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for 
 
 ## Current Phase
 
-**Phase 3 — Database & Inter-Module Data Pipeline** is complete. See `docs/pipeline/database.md` for schema, contracts, and mock pipeline reference.
+**Phase 4 — UI Restructure** is complete. Phases 1 (TRM core), 2 (Web UI + API), 3 (DB + data pipeline), and 4 (UI restructure) are all complete. Phase 5 (data integration — real capture, ASR, radio hardware) is not started (hardware-gated).
 
-Phases 1 (TRM core), 2 (Web UI + API), and 3 (DB + data pipeline) are complete. The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has 4 boundary types with `to_orm()` mapping to ORM models. Mock capture (`capture/mock/run.py`) and preprocessing (`preprocessing/mock/run.py`) scripts simulate the full pipeline. `trm/main_live.py` is the DB-driven TRM entry point — polls for processed rows and persists routing results. The `/live` page hydrates from the database on load via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) and polls every 3 seconds for updates.
+The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has 4 boundary types with `to_orm()` mapping to ORM models. Mock capture (`capture/mock/run.py`) and preprocessing (`preprocessing/mock/run.py`) scripts simulate the full pipeline. `trm/main_live.py` is the DB-driven TRM entry point — polls for processed rows and persists routing results. The `/live` page hydrates from the database on load via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) and polls every 3 seconds for updates.
 
-The existing scenario tooling (`data/`, `api/`, `trm/`, `web/`) is **not being replaced** — it continues to work as-is for development and tuning. Phase 3 adds new modules alongside it.
+The existing scenario tooling (`data/`, `api/`, `trm/`, `web/`) is **not being replaced** — it continues to work as-is for development and tuning.
 
 ## Running
 
@@ -50,7 +50,12 @@ cd web && npm run dev
 ```
 
 ```bash
-# Run the full mock pipeline (capture + preprocessing + TRM against DB)
+# Launch the full mock pipeline + API + frontend in one command
+./live.sh
+```
+
+```bash
+# Run the full mock pipeline manually (capture + preprocessing + TRM against DB)
 alembic upgrade head              # ensure schema exists
 python db/reset.py                # clear all tables
 python preprocessing/mock/run.py & # start preprocessing (polls for captured rows)

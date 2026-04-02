@@ -151,6 +151,6 @@ The `api/` layer imports from `trm/` — it wraps the existing pipeline, it does
 ## Not Yet Implemented
 
 - **Scorer** — plugs into the run-complete flow and the review view when built
-- **Live ingest** — a non-scenario packet source. The API is designed for this (`POST /api/runs` body specifies the source), but only scenario replay is implemented
+- **Real live ingest** — real radio capture feeding the pipeline. The mock pipeline (`/api/mock/start`) simulates this against the DB; real hardware integration is Phase 5
 - **Multi-run comparison** — comparing results across different runs of the same scenario
 - **Authentication** — local dev tool for now

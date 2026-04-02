@@ -413,7 +413,7 @@ Connects to `ws://localhost:8000/ws/runs/{runId}` (WS_BASE derived from API_BASE
 ### Utility Modules
 
 - **`web/src/lib/api.ts`** — `API_BASE` (env or `http://localhost:8000`), `WS_BASE` (http→ws conversion)
-- **`web/src/lib/threadColors.ts`** — Rotating color palette, `getThreadColorMap(threads)` returns `Map<threadId, color>`
+- **`web/src/lib/threadColors.ts`** — Rotating color palette, `buildThreadColorMap(threadIds)` returns `Map<threadId, color>`
 - **`web/src/lib/packetDecisions.ts`** — `buildDecisionMap(records)` returns `Map<packetId, { threadDecision, eventDecision, threadId, eventId }>`
 
 ### TypeScript Types

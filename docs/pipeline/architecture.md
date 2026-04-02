@@ -329,28 +329,24 @@ The TRM currently holds all state in memory via `TRMContext`. A scenario run sta
 
 ### Database writes
 
-The current TRM updates in-memory state and emits `RoutingRecord` objects. For production it also needs to:
-- Write the `RoutingRecord` to the `routing_records` table
-- Update the `transmissions` record with `thread_id`, `event_id`, and `status = 'routed'`
-- Create or update rows in `threads` and `events`
-- Update the `thread_events` join table
+Implemented in `db/persist.py` as `persist_routing_result()`. Called by `trm/main_live.py` after each `router.route()` call. Atomic per-packet — in one transaction it:
+- Upserts the thread (if decision is `new` or `existing`)
+- Upserts the event
+- Upserts the `thread_events` join row
+- Writes the `RoutingRecord` via `record.to_orm()`
+- Updates the transmission with `thread_id`, `event_id`, decisions, and `status = 'routed'`
 
-This can be added as a persistence layer that wraps or extends the existing `_apply()` method. The in-memory state update logic doesn't need to change.
+See `docs/pipeline/database.md` for full details.
 
 ### The WebSocket bridge
 
-The existing WebSocket broadcast (`api/services/runner.py`) pushes context snapshots to the frontend during scenario runs. In production, the frontend could:
-- Read historical state from the database on page load
-- Subscribe to a WebSocket for live updates as new packets are routed
-- Both — DB for history, WebSocket for real-time
-
-This is an evolution of the existing architecture, not a replacement.
+The WebSocket broadcast (`api/services/runner.py`) pushes context snapshots to the frontend during scenario runs. The live page (`/live/[source]`) takes a different approach — it reads historical state from the database via REST endpoints and polls every 3s for updates. Both paths coexist: WebSocket for scenario runs, DB polling for the live pipeline.
 
 ---
 
 ## Open Questions
 
-- **Database engine.** PostgreSQL is the likely choice for production (LISTEN/NOTIFY, JSONB for metadata, mature). SQLite could work for local dev. Decision deferred until implementation.
+- **~~Database engine.~~** Resolved — SQLite via `aiosqlite` for dev, PostgreSQL via `asyncpg` for production. See `docs/pipeline/database.md`.
 - **ASR architecture.** Multi-pass ASR is specified but not built. The number of passes, model selection, and confidence thresholds are all TBD. The database schema accommodates whatever ASR produces.
 - **Context window management.** How to keep the TRM context from growing without bound in production. Windowing vs. summarization vs. hybrid. Needs experimentation once the TRM is running against real radio traffic.
 - **Thread/event close policy.** When does a thread close? When does an event close? Inactivity timeout? LLM decision? Both? Needs design against real traffic patterns.
@@ -361,13 +357,9 @@ This is an evolution of the existing architecture, not a replacement.
 
 ## Build Order
 
-This is not phased like the WebUI plan — the stages are too interdependent for strict phase gates. But the natural order is:
-
-1. **Database schema + ORM setup** — stand up the database, define the models, verify migrations work
-2. **TRM persistence layer** — extend `_apply()` to write to the DB alongside in-memory state. Verify with scenario runs.
-3. **ASR pipeline** — build the preprocessing stage. Reads audio from DB, transcribes, writes text back. Signals TRM.
-4. **Capture → DB integration** — modify the capture backend to write `TransmissionPacket` records to the DB instead of (or in addition to) JSONL.
-5. **Live TRM** — TRM reads from DB instead of scenario files. Continuous operation, context management, restart recovery.
-6. **Frontend DB integration** — web UI reads from DB for historical state, WebSocket for live updates.
-
-Steps 1–2 can happen now with the existing codebase. Steps 3–4 require being in a radio environment (home, not Ohio). Step 5 is the integration point. Step 6 is polish.
+1. **Database schema + ORM setup** — ~~stand up the database, define the models, verify migrations work~~ **Done.** `db/models.py`, Alembic migrations.
+2. **TRM persistence layer** — ~~extend `_apply()` to write to the DB alongside in-memory state~~ **Done.** `db/persist.py`, `trm/main_live.py`.
+3. **ASR pipeline** — build the preprocessing stage. Reads audio from DB, transcribes, writes text back. *Hardware-gated.* Mock version exists at `preprocessing/mock/run.py`.
+4. **Capture → DB integration** — modify the capture backend to write `TransmissionPacket` records to the DB. *Hardware-gated.* Mock version exists at `capture/mock/run.py`.
+5. **Live TRM** — ~~TRM reads from DB instead of scenario files~~ **Done.** `trm/main_live.py` polls for `processed` rows, routes, persists.
+6. **Frontend DB integration** — ~~web UI reads from DB for historical state~~ **Done.** `/live/[source]` page polls DB via REST endpoints every 3s.
