@@ -10,9 +10,9 @@ _Spec: `specs/push_only_mock.md` — reviewed against repo on 2026-04-02_
 
 ## Mock Pipeline Control API
 
-- **Spec says:** Nothing explicit about the mock control API (`/api/mock/start`, `/stop`, `/status`)
+- **Spec says:** Pipeline starts from the UI via the existing start button (`POST /api/mock/start`). No auto-start.
 - **Repo reality:** `api/routes/mock.py` currently launches three subprocess scripts (`capture/mock/run.py`, `preprocessing/mock/run.py`, `trm/main_live.py`) via `asyncio.create_subprocess_exec()` and stores handles in `app.state.mock_processes`. The start endpoint also calls `reset_db()`.
-- **Resolution:** The mock control API must be updated. `POST /api/mock/start` will launch the new in-process `LivePipelineManager` instead of spawning subprocesses. `POST /api/mock/stop` will cancel the async task. `GET /api/mock/status` will check the manager state. The subprocess-based approach is fully replaced.
+- **Resolution:** The mock control API keeps the same endpoints but replaces subprocess management with `LivePipelineManager`. `POST /api/mock/start` launches the in-process pipeline. `POST /api/mock/stop` cancels it. `GET /api/mock/status` checks manager state. The subprocess-based approach is fully replaced.
 
 ## WebSocket Endpoint Naming
 

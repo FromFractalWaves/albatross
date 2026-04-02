@@ -54,13 +54,18 @@ The REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) stay. They
 - Scenario tooling is untouched — `useRunSocket`, `RunManager`, `POST /api/runs` all stay as-is
 - DB schema is unchanged — same tables, same persistence
 - All existing dashboard components (`ThreadLane`, `EventCard`, `TimelineRow`, etc.) are unchanged
-- The `live.sh` convenience script will need updating to reflect the new process model
+
+### What Gets Removed
+
+- `live.sh` is deleted. The pipeline runs inside the API process and is started from the UI via the existing start button (`POST /api/mock/start`). `dev.sh` already launches the API and frontend — that's all you need. There is no auto-start; the user clicks the button, same as they would for a real live source.
 
 ## Done When
 
-- `live.sh` starts the API (which now orchestrates mock capture → preprocessing → TRM internally) and the frontend
-- Opening `/live` connects a WebSocket and receives stage-level messages as packets flow
+- `dev.sh` starts the API and frontend. The pipeline is not running yet.
+- User clicks the start button on `/live/mock`, which calls `POST /api/mock/start`
+- Opening `/live/mock` connects a WebSocket and receives stage-level messages as packets flow
 - Thread lanes, events, and timeline update in real time via push — no polling
 - Page refresh hydrates from DB via REST, then WebSocket picks up live updates
 - A second browser tab connects and receives the same live stream
 - Existing scenario runs (`/run/{runId}`) still work exactly as before
+- `live.sh` is gone
