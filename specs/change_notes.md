@@ -1,0 +1,1 @@
+click on albatross in the top to go to home page

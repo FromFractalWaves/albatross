@@ -110,7 +110,7 @@ export default function ScenarioDetailPage({
 
             {/* Packets */}
             <div className="bg-surface rounded-lg border border-border overflow-hidden">
-              <SectionHeader title="Packets" count={detail.packets.length} />
+              <SectionHeader title="PACKETS" count={detail.packets.length} />
               <div>
                 {detail.packets.map((pkt, i) => {
                   const speaker = (pkt.metadata?.speaker as string) ?? "unknown";
@@ -147,7 +147,7 @@ export default function ScenarioDetailPage({
             {detail.expected_output && (
               <div className="bg-surface rounded-lg border border-border overflow-hidden">
                 <SectionHeader
-                  title="Expected Output"
+                  title="EXPECTED OUTPUT"
                   action={
                     <button
                       onClick={() => setExpectedOpen(!expectedOpen)}
@@ -167,7 +167,7 @@ export default function ScenarioDetailPage({
 
             {/* Run Configuration */}
             <div className="bg-surface rounded-lg border border-border overflow-hidden">
-              <SectionHeader title="Run Configuration" />
+              <SectionHeader title="RUN CONFIGURATION" />
               <div className="flex gap-6 px-4 py-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-[11px] font-mono uppercase text-text-muted tracking-[0.06em]">
