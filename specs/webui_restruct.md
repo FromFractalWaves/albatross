@@ -32,10 +32,11 @@ These are fundamentally different in data source, update pattern, and purpose. M
 
 ### Target
 ```
-/                → homepage (hub/router)
-/trm             → TRM Tools (moved from /)
-/sources         → Live Data source selection
-/live/[source]   → Live Data view for a selected source
+/                    → homepage (hub/router)
+/trm                 → TRM Tools hub (tool selection)
+/trm/scenarios       → Scenario runner (moved from /)
+/sources             → Live Data source selection
+/live/[source]       → Live Data view for a selected source
 ```
 
 ---
@@ -63,7 +64,29 @@ A simple hub page. No data fetching. Two clearly labeled entry points.
 
 ---
 
-## TRM Tools (`/trm`)
+## TRM Tools Hub (`/trm`)
+
+A tool selection hub, mirroring the structure of `/sources`. No data fetching. Lists available TRM tools as cards. Selecting a tool navigates to its route.
+
+**Initial tools:**
+
+| Tool | Route | Description |
+|------|-------|-------------|
+| Scenarios | `/trm/scenarios` | Run scenarios, visualize thread decisions, view scoring |
+
+**Future tools (not in scope for this spec):**
+- Prompt tuning
+- Golden dataset management
+- Scoring / metrics review
+- Domain adaptation
+
+**Design notes:**
+- Same card layout as `/sources` and homepage
+- Selecting a tool navigates to its page — consistent pattern across the whole app
+
+---
+
+## Scenarios (`/trm/scenarios`)
 
 This is the existing `/` page, moved. No functional changes in this spec — just route migration.
 
