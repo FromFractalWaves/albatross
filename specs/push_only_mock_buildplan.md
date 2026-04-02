@@ -4,228 +4,190 @@ _Generated from `specs/push_only_mock.md` — aligned with repo on 2026-04-02_
 
 ## Goal
 
-Replace the poll-based mock pipeline (three subprocess scripts + DB-as-IPC + REST polling) with a push-based pipeline that runs inside the API process and streams stage-level messages over WebSocket, matching the architecture scenario runs already use.
+Replace the subprocess + DB-polling mock pipeline with an in-process async pipeline that pushes stage-level messages over WebSocket, so the live dashboard updates in real time without polling.
 
 ## Context
 
-The scenario path already has the push pattern: `RunManager` in `api/services/runner.py` orchestrates `PacketLoader → PacketQueue → TRMRouter` as async tasks and broadcasts messages over WebSocket via a subscriber list. `useRunSocket.ts` on the frontend receives these messages and updates state via `useReducer`.
+The scenario path already has the push pattern: `RunManager` in `api/services/runner.py` orchestrates `PacketLoader` → `PacketQueue` → `TRMRouter`, broadcasting `packet_routed` messages over WebSocket via `api/routes/runs.py`. The live path currently polls: `useLiveData.ts` fetches `/api/live/threads`, `/events`, `/transmissions` every 3 seconds.
 
-The live mock pipeline currently runs as three separate scripts (`capture/mock/run.py`, `preprocessing/mock/run.py`, `trm/main_live.py`) that use the DB as IPC. The frontend polls three REST endpoints every 3 seconds via `useLiveData.ts`.
+The new live pipeline reuses `PacketQueue` and `TRMRouter` from `trm/pipeline/` but adds capture and preprocessing as async queue stages instead of DB-polling subprocesses. The DB remains the persistence layer — packets are written to it at each stage for hydration — but the live data path is WebSocket push.
 
-This plan brings the live path up to the same push standard while keeping the REST endpoints as the hydration layer for page refreshes.
-
-**Key files that already exist and will be modified:**
-- `api/services/runner.py` — RunManager pattern to replicate
-- `api/routes/mock.py` — mock control endpoints (start/stop/status)
-- `api/routes/live.py` — REST hydration endpoints (unchanged, but gets a WebSocket endpoint)
-- `api/main.py` — app wiring
-- `web/src/hooks/useLiveData.ts` — replaced by new hook
-- `web/src/app/live/[source]/page.tsx` — switches to new hook
-- `live.sh` — deleted
-- `tests/test_mock_api.py` — updated for new mock control
-- `tests/test_live_api.py` — updated for WebSocket
-
-**Key files that stay untouched:**
-- `api/services/runner.py` — scenario RunManager is not modified
-- `api/routes/runs.py` — scenario WebSocket stays as-is
-- `web/src/hooks/useRunSocket.ts` — scenario hook stays as-is
-- `trm/pipeline/router.py` — TRMRouter is used as-is
-- `db/persist.py` — `persist_routing_result()` is called from the new pipeline
-- `contracts/models.py` — boundary types unchanged
-- `capture/mock/run.py`, `preprocessing/mock/run.py`, `trm/main_live.py` — kept for standalone use, but no longer launched by the API
+**Key files that already exist and will be reused:**
+- `trm/pipeline/queue.py` — `PacketQueue` (async queue wrapper)
+- `trm/pipeline/router.py` — `TRMRouter` (stateful LLM routing)
+- `db/persist.py` — `persist_routing_result()` (atomic DB writes)
+- `api/services/runner.py` — `RunManager` (pattern reference for broadcasting)
+- `api/routes/mock.py` — mock control endpoints (will be rewritten)
+- `api/routes/live.py` — REST hydration endpoints (unchanged)
+- `web/src/hooks/useLiveData.ts` — polling hook (will be rewritten)
+- `web/src/hooks/useRunSocket.ts` — WebSocket hook (pattern reference)
+- `web/src/types/websocket.ts` — message types (will be extended)
 
 ## Plan
 
-### Step 1: LivePipelineManager service
+### Step 1: Add WebSocket message types for stage-level pipeline events
+
+**Files:** `contracts/ws.py` (new)
+
+Define Pydantic models for the live pipeline WebSocket messages. These are separate from the scenario `WSMessage` types — the scenario path is untouched.
+
+Message types:
+- `PipelineStarted` — `{"type": "pipeline_started", "total_packets": int}`
+- `PacketCaptured` — `{"type": "packet_captured", "packet_id": str, "timestamp": str, "metadata": dict}`
+- `PacketPreprocessed` — `{"type": "packet_preprocessed", "packet_id": str, "text": str}`
+- `PacketRouted` — `{"type": "packet_routed", "packet_id": str, "routing_record": dict, "context": dict, "incoming_packet": dict | None}` (same shape as the existing scenario `packet_routed`)
+- `PipelineComplete` — `{"type": "pipeline_complete", "total_packets": int, "routing_records": list}`
+- `PipelineError` — `{"type": "pipeline_error", "error": str}`
+
+Each model has a `.to_dict()` method (or use `model_dump()`) for JSON serialization over WebSocket.
+
+### Step 2: Build the in-process mock pipeline manager
 
 **Files:** `api/services/live_pipeline.py` (new)
 
-Create `LivePipelineManager`, modeled after `RunManager` in `api/services/runner.py`. This class orchestrates the mock pipeline as coordinated async tasks inside the API process.
+Create `LivePipelineManager` — analogous to `RunManager` but for the live mock pipeline. It manages a single pipeline instance (not per-run like `RunManager`).
 
-**Structure:**
-- `LivePipelineManager` with `status`, `subscribers: list[WebSocket]`, `messages: list[dict]` (backlog for late-joining clients), and a `task` handle for the background pipeline.
-- `start()` — resets DB via `reset_db()`, creates two `asyncio.Queue`s (captured → preprocessed, preprocessed → routed), spawns three async tasks (`_capture`, `_preprocess`, `_route`), broadcasts `pipeline_started`.
-- `stop()` — cancels the pipeline task, broadcasts `pipeline_complete`, clears state.
-- `subscribe(ws)` / `unsubscribe(ws)` — manages WebSocket subscribers. On subscribe, sends full message backlog (same pattern as `RunManager`).
-- `_broadcast(message)` — appends to backlog, sends to all connected subscribers.
+**State:**
+- `_task: asyncio.Task | None` — the running pipeline task
+- `_subscribers: list[WebSocket]` — connected WebSocket clients
+- `_messages: list[dict]` — message backlog for late-joining clients (same pattern as `RunManager.Run.messages`)
+- `_router: TRMRouter | None` — the live router instance (needed for context access)
 
-**Three internal async tasks:**
+**Methods:**
+- `async start(session_factory)` — if not already running, reset DB, start the pipeline as an asyncio task. Return immediately.
+- `async stop()` — cancel the task, clean up.
+- `status() -> str` — `"running"` or `"stopped"`.
+- `subscribe(ws: WebSocket)` — add to subscribers, send backlog.
+- `unsubscribe(ws: WebSocket)` — remove from subscribers.
+- `async _broadcast(message: dict)` — append to backlog, send to all subscribers, remove dead connections.
 
-`_capture()`:
-- Reads `packets_radio.json` (same source as `capture/mock/run.py`)
-- For each packet: constructs `TransmissionPacket`, calls `to_orm()`, writes to DB with `status='captured'`, puts packet data on `captured_queue`, broadcasts `packet_captured` message, sleeps 10s.
-- After all packets: puts `None` sentinel on queue.
+**Pipeline task (`_run_pipeline`):**
 
-`_preprocess(captured_queue, preprocessed_queue)`:
-- Consumes from `captured_queue`.
-- For each packet: updates DB row to `status='processing'`, sleeps 10s (simulated ASR), writes text + ASR metadata to DB, updates to `status='processed'`, puts packet data on `preprocessed_queue`, broadcasts `packet_preprocessed` message.
-- On `None` sentinel: passes it through to `preprocessed_queue`.
+Three async stages connected by two `PacketQueue` instances:
 
-`_route(preprocessed_queue)`:
-- Creates `TRMRouter(buffers=5)`.
-- Consumes from `preprocessed_queue`.
-- For each packet: builds `ReadyPacket`, updates DB to `status='routing'`, calls `await router.route(packet)`, calls `await persist_routing_result(session, packet_id, record, router.context)`, broadcasts `packet_routed` message (same shape as scenario: `routing_record`, `context`, `incoming_packet`).
-- On `None` sentinel: broadcasts `pipeline_complete`.
+1. **Capture stage** — reads `packets_radio.json`, for each entry: construct `TransmissionPacket`, call `to_orm()`, write to DB with `status='captured'`, put raw packet data onto `capture_queue`, broadcast `packet_captured`. Sleep 10s between packets. Send `None` sentinel when done.
 
-**Message shapes:**
-```
-pipeline_started:  { type, source }
-packet_captured:   { type, packet_id, timestamp }
-packet_preprocessed: { type, packet_id, timestamp, text }
-packet_routed:     { type, packet_id, routing_record, context, incoming_packet }
-pipeline_complete: { type, total_packets }
-```
+2. **Preprocessing stage** — consumes from `capture_queue`. For each packet: update DB row to `status='processing'`, sleep to simulate ASR delay (shorter than 10s — use 3s for responsiveness), update DB row with text + ASR fields + `status='processed'`, put `ReadyPacket` onto `routing_queue`, broadcast `packet_preprocessed`. Forward `None` sentinel.
 
-### Step 2: WebSocket endpoint for live pipeline
+3. **Routing stage** — consumes from `routing_queue`. For each `ReadyPacket`: update DB row to `status='routing'`, call `router.route(packet)`, call `persist_routing_result()`, broadcast `packet_routed` (with full context and routing record). After all packets: broadcast `pipeline_complete`.
 
-**Files:** `api/routes/live.py` (modify)
+Wrap all three stages in a `asyncio.gather()` call, with `pipeline_started` broadcast before and error handling around it.
 
-Add a WebSocket endpoint to the existing live routes:
+The DB session factory is passed in from the FastAPI dependency. Each stage creates its own session from the factory for its DB operations.
 
-`ws://localhost:8000/ws/live/{source}`:
-- Accept WebSocket connection.
-- Look up `LivePipelineManager` from `app.state.live_pipeline`.
-- Call `subscribe(ws)` — this sends the message backlog.
-- Keep connection open (recv loop) until client disconnects or pipeline ends.
-- On disconnect: call `unsubscribe(ws)`.
+### Step 3: Add WebSocket endpoint and rewrite mock control routes
 
-The existing REST endpoints (`GET /api/live/threads`, `/events`, `/transmissions`) stay unchanged — they remain the hydration layer.
+**Files:** `api/routes/mock.py`
 
-### Step 3: Update mock control API
+Rewrite the existing mock routes:
 
-**Files:** `api/routes/mock.py` (modify)
+- `POST /api/mock/start` — calls `live_pipeline_manager.start(session_factory)` instead of spawning subprocesses. The `session_factory` comes from `db.session` (the existing `async_sessionmaker`). Resets DB before starting (same as current behavior).
+- `POST /api/mock/stop` — calls `live_pipeline_manager.stop()` instead of terminating processes.
+- `GET /api/mock/status` — calls `live_pipeline_manager.status()` instead of checking process liveness.
 
-Replace the subprocess-based control with `LivePipelineManager`:
+Add new WebSocket endpoint:
+- `ws://localhost:8000/ws/live/mock` — accepts WebSocket connection, calls `live_pipeline_manager.subscribe(ws)`, enters receive loop (to detect disconnects), calls `unsubscribe` on disconnect. Same pattern as the `/ws/runs/{run_id}` endpoint in `api/routes/runs.py`.
 
-`POST /api/mock/start`:
-- Get `LivePipelineManager` from `app.state.live_pipeline`.
-- If already running, return error.
-- Call `await manager.start()`.
-- Return `{"status": "started"}`.
+### Step 4: Register the pipeline manager on app state
 
-`POST /api/mock/stop`:
-- Call `await manager.stop()`.
-- Return `{"status": "stopped"}`.
+**Files:** `api/main.py`
 
-`GET /api/mock/status`:
-- Return `{"status": manager.status}` (values: `"running"`, `"stopped"`, `"complete"`).
+Add `app.state.live_pipeline_manager = LivePipelineManager()` alongside the existing `app.state.run_manager` and `app.state.mock_processes`.
 
-Remove all subprocess management code (`asyncio.create_subprocess_exec`, `app.state.mock_processes`, process termination logic).
+Remove `app.state.mock_processes` — it's no longer used since the pipeline is in-process.
 
-### Step 4: Wire LivePipelineManager into the app
+Pass the manager to the mock routes (either via `request.app.state` as currently done, or via FastAPI dependency injection).
 
-**Files:** `api/main.py` (modify)
+### Step 5: Add frontend WebSocket message types
 
-- Import `LivePipelineManager` from `api.services.live_pipeline`.
-- Replace `app.state.mock_processes = []` with `app.state.live_pipeline = LivePipelineManager()`.
-- No new routers needed — the WebSocket endpoint is added to the existing `live_router`.
+**Files:** `web/src/types/websocket.ts`
 
-### Step 5: Install TanStack Query
-
-**Files:** `web/package.json` (modify via npm)
+Add the live pipeline message types as a separate discriminated union (do not modify the existing `WSMessage` type):
 
 ```
-cd web && npm install @tanstack/react-query
+LivePipelineStarted  — { type: "pipeline_started", total_packets: number }
+LivePacketCaptured   — { type: "packet_captured", packet_id: string, timestamp: string, metadata: Record<string, unknown> }
+LivePacketPreprocessed — { type: "packet_preprocessed", packet_id: string, text: string }
+LivePacketRouted     — { type: "packet_routed", packet_id: string, routing_record: RoutingRecord, context: TRMContext, incoming_packet: ReadyPacket | null }
+LivePipelineComplete — { type: "pipeline_complete", total_packets: number, routing_records: RoutingRecord[] }
+LivePipelineError    — { type: "pipeline_error", error: string }
 ```
 
-Add `QueryClientProvider` to `web/src/app/layout.tsx`:
-- Create a client-side `QueryClient` instance.
-- Wrap children in `QueryClientProvider`.
+Union type: `LiveWSMessage`
 
-### Step 6: New frontend hook — useLivePipeline
+### Step 6: Install TanStack Query and add provider
 
-**Files:** `web/src/hooks/useLivePipeline.ts` (new)
+**Files:** `web/package.json`, `web/src/app/layout.tsx`, `web/src/app/providers.tsx` (new)
 
-Create a hook that combines TanStack Query for REST hydration with WebSocket for live updates. It must return the same state shape as `useLiveData` so the live page needs minimal changes.
+Install `@tanstack/react-query`. Create a `Providers` component with `QueryClientProvider` and wrap the app layout's children with it. Use `"use client"` directive on the providers file since `QueryClientProvider` needs client-side React context.
 
-**Hydration (TanStack Query):**
-- `useQuery` for `/api/live/threads`, `/api/live/events`, `/api/live/transmissions` — fetches on mount, provides initial data.
-- These queries have a long `staleTime` — WebSocket updates keep the cache current, no polling needed.
+### Step 7: Rewrite useLiveData as WebSocket + TanStack Query hook
 
-**Live updates (WebSocket):**
-- Opens WebSocket to `ws://localhost:8000/ws/live/{source}`.
-- On `packet_routed` messages: calls `queryClient.setQueryData` to update the threads, events, and transmissions caches reactively.
-- On `packet_captured` and `packet_preprocessed`: updates a local `pipelineStages` state so the UI can show where packets are in the pipeline.
-- On `pipeline_started` / `pipeline_complete`: updates status.
+**Files:** `web/src/hooks/useLiveData.ts`
 
-**Return type** — same shape as current `useLiveData`:
-```typescript
-{
-  status: "loading" | "ready" | "empty" | "error"
-  context: TRMContext | null
-  routingRecords: RoutingRecord[]
-  latestPacketId: string | null
-  error: string | null
-  pipelineStages: PipelinePacket[]  // new: packets in-flight (captured, preprocessing)
-}
-```
+Rewrite the hook to:
 
-The `pipelineStages` field is new — it tracks packets that have entered the pipeline but haven't been routed yet. The live page can use this for observability (showing packets moving through stages).
+1. **Hydration** — use TanStack Query's `useQuery` to fetch `/api/live/threads`, `/events`, `/transmissions` on mount. This replaces the manual `fetch` + `useEffect` pattern. The queries provide the initial state on page load or refresh.
 
-### Step 7: Add WebSocket message types for live pipeline
+2. **WebSocket** — open a connection to `${WS_BASE}/ws/live/mock` when the pipeline is running. Parse incoming `LiveWSMessage` messages and update the TanStack Query cache via `queryClient.setQueryData()`:
+   - `packet_routed` — append to transmissions cache, update threads/events caches from the included `context`.
+   - `packet_captured` / `packet_preprocessed` — update a local pipeline stage state (for observability UI, optional in v1).
+   - `pipeline_complete` — invalidate all queries to re-fetch final state.
 
-**Files:** `web/src/types/websocket.ts` (modify)
+3. **Return shape** — same as current `useLiveData` plus `incomingPacket`:
+   ```
+   { status, context, routingRecords, latestPacketId, incomingPacket, error }
+   ```
+   Build `context` and `routingRecords` from the TanStack Query cache data, same reconstruction logic as the current hook. When a `packet_routed` message arrives with full `context`, use that directly instead of reconstructing.
 
-Add new message types to the discriminated union:
+4. **Connection lifecycle** — connect WebSocket after the pipeline is started (the live page already polls `/api/mock/status`). Reconnect on close with backoff. Disconnect on unmount.
 
-```typescript
-PipelineStartedMessage { type: "pipeline_started"; source: string }
-PacketCapturedMessage  { type: "packet_captured"; packet_id: string; timestamp: string }
-PacketPreprocessedMessage { type: "packet_preprocessed"; packet_id: string; timestamp: string; text: string }
-PipelineCompleteMessage { type: "pipeline_complete"; total_packets: number }
-```
+### Step 8: Update the live page to use WebSocket-driven state
 
-`packet_routed` already exists and is reused with the same shape.
+**Files:** `web/src/app/live/[source]/page.tsx`
 
-Create a separate `LiveWSMessage` union type (distinct from the scenario `WSMessage`) to keep the two paths cleanly separated.
-
-### Step 8: Update the live page
-
-**Files:** `web/src/app/live/[source]/page.tsx` (modify)
-
-- Replace `useLiveData()` with `useLivePipeline(source)`.
-- The page already destructures `{ status, context, routingRecords, latestPacketId }` — these keep working.
-- Remove the manual `/api/mock/status` polling — the pipeline status is now delivered via WebSocket.
-- The mock start/stop buttons stay but call the same `POST /api/mock/start` and `/stop` endpoints.
-- Optionally show `pipelineStages` in a new section or badge to indicate packets in-flight (captured but not yet routed). This is additive — existing components are unchanged.
+Minimal changes:
+- The hook return shape is compatible, so `threadColorMap`, `decisionMap`, `timelinePackets` derivations stay the same.
+- Add `incomingPacket` to the `ContextInspector` props (currently hardcoded to `null`).
+- Optionally add an `IncomingBanner` when `incomingPacket` is non-null (reuses the component from the run page).
+- The mock pipeline controls (`Start` / `Stop` buttons) stay — they still call `/api/mock/start` and `/api/mock/stop`. The status polling can be replaced by deriving status from the WebSocket connection state.
 
 ### Step 9: Delete live.sh
 
 **Files:** `live.sh` (delete)
 
-Delete `live.sh`. The pipeline now runs inside the API process and is started from the UI via the existing start button on `/live/mock` (`POST /api/mock/start`). `dev.sh` already launches the API and frontend — that's all you need. There is no auto-start.
+Remove `live.sh`. The pipeline is now started from the UI via `POST /api/mock/start`. `dev.sh` is the only launch script needed.
 
-### Step 10: Update tests
+### Step 10: Update CLAUDE.md running instructions
 
-**Files:** `tests/test_mock_api.py` (modify), `tests/test_live_api.py` (modify), `tests/test_live_pipeline.py` (new)
+**Files:** `CLAUDE.md`
 
-**`tests/test_live_pipeline.py`** (new):
-- Test `LivePipelineManager` directly — start, verify messages are broadcast in correct order (`pipeline_started` → `packet_captured` → `packet_preprocessed` → `packet_routed` → `pipeline_complete`), verify DB state after routing.
-- Mock `TRMRouter` the same way `test_runs.py` does (patch `TRMRouter` class, return predictable routing records).
-- Use in-memory SQLite and dependency override for `get_session`.
-
-**`tests/test_mock_api.py`** (modify):
-- Remove subprocess mocking (`asyncio.create_subprocess_exec` patches).
-- Mock `LivePipelineManager.start()` / `stop()` instead.
-- Test that `POST /api/mock/start` calls `manager.start()`, `POST /api/mock/stop` calls `manager.stop()`, `GET /api/mock/status` returns manager status.
-
-**`tests/test_live_api.py`** (modify):
-- Add WebSocket test: connect to `/ws/live/mock`, verify backlog delivery, verify message format.
-- Existing REST endpoint tests (`/api/live/threads`, `/events`, `/transmissions`) stay unchanged.
+Remove the `live.sh` references from the Running section. Update the mock pipeline description to reflect that it runs in-process via the API. Remove the manual pipeline launch instructions (the `python capture/mock/run.py &` block) or mark them as standalone-only usage.
 
 ## Testing
 
-- Mock `TRMRouter` in pipeline tests (same pattern as `test_runs.py` — patch the class, return deterministic routing records) so tests don't need an API key.
-- Use in-memory SQLite for DB tests (same pattern as `test_live_api.py` with `get_session` override).
-- WebSocket tests use `TestClient` from starlette (same pattern as `test_runs.py`).
-- Verify the full message sequence: `pipeline_started` → N × (`packet_captured` → `packet_preprocessed` → `packet_routed`) → `pipeline_complete`.
-- Verify DB state after pipeline completes: transmissions have `status='routed'`, threads and events exist.
-- Verify late-joining WebSocket clients receive the message backlog.
+**New tests in `tests/test_live_pipeline.py`:**
+- Test `LivePipelineManager.start()` launches a pipeline task (mock the `TRMRouter` the same way `test_runs.py` does with `_make_mock_router()`).
+- Test `LivePipelineManager.stop()` cancels the task.
+- Test `LivePipelineManager.status()` returns correct state.
+- Test WebSocket at `/ws/live/mock` receives `pipeline_started`, `packet_captured`, `packet_preprocessed`, `packet_routed`, `pipeline_complete` messages in order.
+- Test late-joining WebSocket client receives backlog.
+- Test two concurrent WebSocket clients both receive messages.
+
+**Update `tests/test_mock_api.py`:**
+- Rewrite to test the new in-process pipeline instead of subprocess management.
+- Mock `TRMRouter` to avoid LLM calls (same pattern as `test_runs.py`).
+- Test `/api/mock/start`, `/stop`, `/status` with the new `LivePipelineManager`.
+
+**Existing tests that should still pass unchanged:**
+- `test_live_api.py` — REST hydration endpoints are unchanged.
+- `test_runs.py` — scenario WebSocket is untouched.
+- `test_trm_persistence.py` — persistence logic is unchanged.
+- All other test files.
 
 ## Doc Updates
 
 After implementation, update:
-- `CLAUDE.md` — update "Current State" section (live pipeline is now push-based), update "Running" section (remove `live.sh`, pipeline starts from UI), update Architecture sections for `api/services/live_pipeline.py` and modified routes/hooks.
-- `docs/pipeline/mock_pipeline.md` — rewrite to reflect in-process pipeline architecture instead of subprocess-based.
-- `docs/web/api.md` — add `/ws/live/{source}` WebSocket endpoint, update mock control API docs, document new message types.
-- `docs/web/ui_spec.md` — document pipeline stage observability if `pipelineStages` is surfaced in the UI.
+- `docs/pipeline/mock_pipeline.md` — rewrite to describe the in-process async pipeline, WebSocket messages, and the new data flow. Remove subprocess/polling descriptions.
+- `docs/web/api.md` — add the `/ws/live/mock` WebSocket endpoint and its message protocol. Update the mock control endpoints description.
+- `CLAUDE.md` — update Current State, Running, and Architecture sections (covered in Step 10).

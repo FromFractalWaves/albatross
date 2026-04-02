@@ -69,3 +69,7 @@ The REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) stay. They
 - A second browser tab connects and receives the same live stream
 - Existing scenario runs (`/run/{runId}`) still work exactly as before
 - `live.sh` is gone
+
+## Reference
+
+`docs/pipeline/mock_pipeline.md` is the end-to-end reference for how the current subprocess + polling pipeline works — stage descriptions, API layer, frontend hook, timing, the full picture. It describes everything this spec replaces. After this work is done, that doc and all other relevant docs need to be updated to reflect the new architecture.
