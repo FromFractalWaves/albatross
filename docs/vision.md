@@ -50,6 +50,8 @@ Live mode is the end state of the pipeline — real data flowing through capture
 
 This means getting mock to run push-only *is* the live mode architecture. Once that works end-to-end through the UI, plugging in real hardware is a plumbing change at the capture boundary — not a redesign. The pipeline is production-shaped regardless of what's feeding it.
 
+Once the pipeline runs continuously rather than processing a finite scenario and stopping, a new category of problems opens up: session separation (when does one "run" end and the next begin?), data lifecycle for closed threads and resolved events, and browsing or querying historical routed data after the fact. None of this is needed for push-only mock, but it will need to be solved before live mode is real.
+
 ---
 
 ## Adaptive Metadata Display
