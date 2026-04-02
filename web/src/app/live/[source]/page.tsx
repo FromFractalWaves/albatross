@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useLiveData } from "@/hooks/useLiveData";
 import { API_BASE } from "@/lib/api";
 import { buildThreadColorMap } from "@/lib/threadColors";
@@ -15,14 +15,26 @@ import { ContextInspector } from "@/components/ContextInspector";
 
 type Tab = "live" | "events" | "timeline";
 
-export default function LivePage() {
+const sourceLabels: Record<string, string> = {
+  mock: "Mock Pipeline",
+};
+
+export default function LivePage({
+  params,
+}: {
+  params: Promise<{ source: string }>;
+}) {
+  const { source } = use(params);
   const { status, context, routingRecords, latestPacketId, error } = useLiveData();
 
   const [activeTab, setActiveTab] = useState<Tab>("live");
   const [pipelineStatus, setPipelineStatus] = useState<"running" | "stopped" | "unknown">("unknown");
   const [pipelineLoading, setPipelineLoading] = useState(false);
 
+  const sourceLabel = sourceLabels[source] ?? source;
+
   useEffect(() => {
+    if (source !== "mock") return;
     let active = true;
     const poll = async () => {
       try {
@@ -36,7 +48,7 @@ export default function LivePage() {
     poll();
     const id = setInterval(poll, 3000);
     return () => { active = false; clearInterval(id); };
-  }, []);
+  }, [source]);
 
   const startPipeline = useCallback(async () => {
     setPipelineLoading(true);
@@ -90,7 +102,7 @@ export default function LivePage() {
   return (
     <div className="min-h-screen bg-base">
       <TopBar
-        scenarioName="Live Pipeline"
+        scenarioName={`Live — ${sourceLabel}`}
         status={topBarStatus}
         packetsRouted={routingRecords.length}
         totalPackets={null}
@@ -100,33 +112,35 @@ export default function LivePage() {
       />
 
       <div className="flex flex-col gap-3.5 p-4 px-5">
-        {/* Pipeline Controls */}
-        <div className="flex items-center gap-3 px-1">
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`inline-block w-2 h-2 rounded-full ${
-                pipelineStatus === "running" ? "bg-accent-green animate-pulse-dot" : "bg-text-muted"
-              }`}
-            />
-            <span className="text-[11px] font-mono uppercase tracking-[0.06em] text-text-muted">
-              Pipeline {pipelineStatus}
-            </span>
+        {/* Pipeline Controls (mock source only) */}
+        {source === "mock" && (
+          <div className="flex items-center gap-3 px-1">
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  pipelineStatus === "running" ? "bg-accent-green animate-pulse-dot" : "bg-text-muted"
+                }`}
+              />
+              <span className="text-[11px] font-mono uppercase tracking-[0.06em] text-text-muted">
+                Pipeline {pipelineStatus}
+              </span>
+            </div>
+            <button
+              onClick={startPipeline}
+              disabled={pipelineLoading || pipelineStatus === "running"}
+              className="px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-[0.06em] rounded bg-accent-green/15 text-accent-green hover:bg-accent-green/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Start Mock Pipeline
+            </button>
+            <button
+              onClick={stopPipeline}
+              disabled={pipelineLoading || pipelineStatus === "stopped"}
+              className="px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-[0.06em] rounded bg-accent-red/15 text-accent-red hover:bg-accent-red/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Stop
+            </button>
           </div>
-          <button
-            onClick={startPipeline}
-            disabled={pipelineLoading || pipelineStatus === "running"}
-            className="px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-[0.06em] rounded bg-accent-green/15 text-accent-green hover:bg-accent-green/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Start Mock Pipeline
-          </button>
-          <button
-            onClick={stopPipeline}
-            disabled={pipelineLoading || pipelineStatus === "stopped"}
-            className="px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-[0.06em] rounded bg-accent-red/15 text-accent-red hover:bg-accent-red/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Stop
-          </button>
-        </div>
+        )}
 
         {/* Tab Bar */}
         <TabBar

@@ -122,11 +122,13 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 - **`web/src/hooks/useTheme.ts`** — Dark/light theme toggle hook. Reads/writes `localStorage`, toggles `dark`/`light` class on `<html>`. SSR-safe.
 - **`web/src/lib/`** — `utils.ts` (cn helper), `threadColors.ts` (rotating color palette for threads), `packetDecisions.ts` (joins routing records to packets by ID), `api.ts` (API_BASE and WS_BASE constants).
 - **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`, `HubTopBar`, `TabBar`, `ThemeToggle`.
-- **`web/src/app/page.tsx`** — Homepage hub: two cards linking to `/trm` (TRM Tools) and `/live` (Live Data).
-- **`web/src/app/trm/page.tsx`** — Scenario hub: lists tiers and scenarios, links to detail pages.
-- **`web/src/app/scenarios/[tier]/[scenario]/page.tsx`** — Scenario detail: README, packet list, expected output, run config, launches run. Back-link to `/trm`.
+- **`web/src/app/page.tsx`** — Homepage hub: two cards linking to `/trm` (TRM Tools) and `/sources` (Live Data).
+- **`web/src/app/trm/page.tsx`** — TRM Tools hub: card linking to `/trm/scenarios`.
+- **`web/src/app/trm/scenarios/page.tsx`** — Scenario browser: lists tiers and scenarios, links to detail pages.
+- **`web/src/app/trm/scenarios/[tier]/[scenario]/page.tsx`** — Scenario detail: README, packet list, expected output, run config, launches run. Back-link to `/trm/scenarios`.
+- **`web/src/app/sources/page.tsx`** — Source selection hub: card for Mock Pipeline linking to `/live/mock`.
 - **`web/src/app/run/[runId]/page.tsx`** — Live run dashboard: LIVE (thread lanes), EVENTS (event cards), TIMELINE (chronological list). Incoming packet banner, buffer zone, decision badges, context inspector.
-- **`web/src/app/live/page.tsx`** — DB-hydrated live dashboard with mock pipeline controls (Start/Stop/Status). Same components as run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3s for updates.
+- **`web/src/app/live/[source]/page.tsx`** — DB-hydrated live dashboard, dynamic by source. Mock pipeline controls shown when source is "mock". Same components as run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3s for updates.
 
 ### Tests (`tests/`)
 

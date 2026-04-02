@@ -16,7 +16,7 @@ export default function Home() {
               TRM Tools
             </span>
             <span className="text-[13px] text-text-muted leading-relaxed">
-              Scenario library, run configurations, and routing analysis.
+              Scenario runner, scoring, prompt tuning, golden dataset management, domain adaptation. Everything needed to evaluate and improve the TRM.
             </span>
             <span className="text-[11px] font-mono uppercase tracking-[0.06em] text-accent-blue mt-2">
               Browse Scenarios →
@@ -24,17 +24,17 @@ export default function Home() {
           </Link>
 
           <Link
-            href="/live"
+            href="/sources"
             className="group bg-surface rounded-lg border border-border hover:bg-hover hover:border-accent-green/30 transition-all p-8 flex flex-col gap-3"
           >
             <span className="text-lg font-bold text-text-primary font-mono tracking-tight">
               Live Data
             </span>
             <span className="text-[13px] text-text-muted leading-relaxed">
-              Real-time pipeline view with mock pipeline controls.
+              Real-time pipeline visualization. Thread lanes, event stream, packet timeline. Connects to live or mock radio data source.
             </span>
             <span className="text-[11px] font-mono uppercase tracking-[0.06em] text-accent-green mt-2">
-              Open Pipeline →
+              Select Source →
             </span>
           </Link>
         </div>
