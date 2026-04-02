@@ -4,77 +4,105 @@ _Generated from spec — aligned with repo on 2026-04-01_
 
 ## Goal
 
-Complete the remaining UI restructure work: add the `/sources` source selection page, convert `/live` to a dynamic `/live/[source]` route, and update homepage links and card copy to match spec.
+Complete the remaining UI restructure: add `/sources` and `/trm` hub pages, convert `/live` to dynamic `/live/[source]`, move scenario browser from `/trm` to `/trm/scenarios`, and update homepage links and card copy.
 
 ## Context
 
-Most of the restructure was completed in attempt 1:
-- Homepage hub (`web/src/app/page.tsx`) — two-card layout, working
-- `/trm` route (`web/src/app/trm/page.tsx`) — scenario browser, working
-- `/live` page (`web/src/app/live/page.tsx`) — live dashboard with mock pipeline controls, working
-- Theme system (`web/src/hooks/useTheme.ts`, `web/src/components/ThemeToggle.tsx`) — working
-- Mock pipeline API (`api/routes/mock.py`) — `start`, `stop`, `status` endpoints, working
-- All components (`TopBar`, `HubTopBar`, `TabBar`, etc.) — working
-- Header already reads "Albatross", buffer counter already hidden on live page
+Most of the restructure was completed in attempt 1. The following already works:
+- Homepage hub (`web/src/app/page.tsx`) — two-card layout
+- Scenario browser (`web/src/app/trm/page.tsx`) — fetches and lists scenarios by tier
+- Scenario detail (`web/src/app/scenarios/[tier]/[scenario]/page.tsx`) — README, packets, run config
+- Live dashboard (`web/src/app/live/page.tsx`) — mock pipeline controls, thread lanes, events, timeline
+- Theme system (`web/src/hooks/useTheme.ts`, `web/src/components/ThemeToggle.tsx`)
+- Mock pipeline API (`api/routes/mock.py`) — start, stop, status endpoints
+- All dashboard components (TopBar, HubTopBar, TabBar, ThreadLane, etc.)
+- Header reads "Albatross", buffer counter hidden on live page
 
-What remains is the `/sources` intermediate page and dynamic `/live/[source]` routing.
+What remains is restructuring `/trm` into a hub + sub-route, adding `/sources`, and making `/live` dynamic.
 
 ## Plan
 
-### Step 1: Create `/sources` page
+### Step 1: Move scenario browser from `/trm` to `/trm/scenarios`
+
+**Files:** `web/src/app/trm/scenarios/page.tsx` (new), `web/src/app/trm/page.tsx` (will be replaced in Step 2)
+
+Move the contents of `web/src/app/trm/page.tsx` into `web/src/app/trm/scenarios/page.tsx`. This is a straight move — the scenario browser logic (fetching `/api/scenarios`, listing tiers, linking to detail pages) stays identical. Update the scenario links to point to `/trm/scenarios/{tier}/{scenario}` instead of `/scenarios/{tier}/{scenario}`.
+
+### Step 2: Move scenario detail pages under `/trm/scenarios`
+
+**Files:** `web/src/app/trm/scenarios/[tier]/[scenario]/page.tsx` (new), `web/src/app/scenarios/[tier]/[scenario]/page.tsx` (delete)
+
+Move the scenario detail page from `web/src/app/scenarios/[tier]/[scenario]/page.tsx` to `web/src/app/trm/scenarios/[tier]/[scenario]/page.tsx`. Update the back-link from `/trm` to `/trm/scenarios`. Everything else stays the same.
+
+Delete the now-empty `web/src/app/scenarios/` directory.
+
+### Step 3: Convert `/trm` into a TRM Tools hub
+
+**Files:** `web/src/app/trm/page.tsx` (rewrite)
+
+Replace the current scenario browser with a hub page. Same structure as the homepage — uses `HubTopBar`, displays tool cards. One card for now:
+
+- **Card: Scenarios**
+  - Label: "Scenarios"
+  - Description: "Run scenarios, visualize thread decisions, view scoring"
+  - Links to `/trm/scenarios`
+  - Use accent-blue color theming (consistent with TRM Tools card on homepage)
+
+Layout mirrors the homepage card style (`bg-surface`, `rounded-lg`, `border-border`). Since there's only one card initially, use a single-column centered layout (not a grid) — or match the homepage grid so it looks natural when more tools are added later.
+
+### Step 4: Create `/sources` page
 
 **Files:** `web/src/app/sources/page.tsx` (new)
 
-Create the source selection page at `/sources`. Uses `HubTopBar` (same as homepage and `/trm`). Displays a single card for the mock pipeline source:
+Source selection page. Uses `HubTopBar`. Displays one card:
 
 - **Card: Mock Pipeline**
   - Label: "Mock Pipeline"
   - Description: "Replays a scenario with full radio metadata, simulating live capture"
-  - Status indicator: show "available" (static for now — no API call needed since mock is always available)
+  - Status indicator: "available" (static text — no API call needed)
   - Links to `/live/mock`
 
-Layout should match the homepage card style (same `bg-surface`, `rounded-lg`, `border-border` pattern used in `web/src/app/page.tsx`). Use accent-green color theming consistent with the "Live Data" card on the homepage.
+Use accent-green color theming (consistent with Live Data card on homepage). Same card layout pattern as the `/trm` hub from Step 3.
 
-### Step 2: Convert `/live` to `/live/[source]`
+### Step 5: Convert `/live` to `/live/[source]`
 
-**Files:** `web/src/app/live/page.tsx` (delete), `web/src/app/live/[source]/page.tsx` (new, moved from `live/page.tsx`)
+**Files:** `web/src/app/live/[source]/page.tsx` (new), `web/src/app/live/page.tsx` (delete)
 
-Move the current `live/page.tsx` to `live/[source]/page.tsx`. Changes:
+Move `web/src/app/live/page.tsx` to `web/src/app/live/[source]/page.tsx`. Changes:
 
 1. Accept `params` prop to read the `source` route parameter
-2. Use the `source` param in the TopBar's `scenarioName` (e.g. "Live — Mock Pipeline" when source is "mock")
-3. The mock pipeline controls (start/stop/status) are currently hardcoded — this is fine for now since mock is the only source. Guard them with `if (source === "mock")` so future sources don't show irrelevant controls
-4. All existing functionality (useLiveData, TabBar, ThreadLane, EventCard, TimelineRow, ContextInspector) stays exactly the same
+2. Use the source param in TopBar's `scenarioName` — e.g. "Live — Mock Pipeline" when source is `"mock"`
+3. Guard mock pipeline controls with `if (source === "mock")` so future sources won't show irrelevant start/stop buttons
+4. All existing functionality stays: `useLiveData`, `TabBar`, `ThreadLane`, `EventCard`, `TimelineRow`, `ContextInspector`
 
 No changes to `useLiveData` hook or API endpoints — the data path is the same regardless of source routing.
 
-### Step 3: Update homepage card copy and link
+### Step 6: Update homepage card copy and links
 
 **Files:** `web/src/app/page.tsx`
 
-Two changes:
+Three changes:
 
-1. **Live Data card link:** Change `href="/live"` to `href="/sources"`
-2. **Card descriptions:** Update to match spec:
-   - TRM Tools description: "Scenario runner, scoring, prompt tuning, golden dataset management, domain adaptation. Everything needed to evaluate and improve the TRM."
-   - Live Data description: "Real-time pipeline visualization. Thread lanes, event stream, packet timeline. Connects to live or mock radio data source."
-   - Live Data link text: "Select Source →" (was "Open Pipeline →")
+1. **Live Data card link:** `href="/live"` → `href="/sources"`
+2. **TRM Tools description:** "Scenario runner, scoring, prompt tuning, golden dataset management, domain adaptation. Everything needed to evaluate and improve the TRM."
+3. **Live Data description:** "Real-time pipeline visualization. Thread lanes, event stream, packet timeline. Connects to live or mock radio data source."
+4. **Live Data link text:** "Open Pipeline →" → "Select Source →"
 
 ## Testing
 
-No new automated tests needed — these are static UI pages with no new API endpoints. The existing mock pipeline API tests in `tests/` cover the backend.
+No new automated tests needed — these are static UI pages with no new API endpoints or backend changes. Existing mock pipeline API tests in `tests/` remain valid.
 
 Manual verification:
-- Navigate `/` → click "Live Data" → lands on `/sources`
-- Navigate `/sources` → click "Mock Pipeline" → lands on `/live/mock`
-- `/live/mock` renders the full live dashboard with pipeline controls
-- `/live/mock` start/stop pipeline works as before
-- Theme toggle works on all new/modified pages
-- Direct navigation to `/live/mock` works (no need to go through `/sources`)
+- `/` → "TRM Tools" card → `/trm` (hub) → "Scenarios" card → `/trm/scenarios` (browser) → click scenario → `/trm/scenarios/{tier}/{scenario}` (detail)
+- `/` → "Live Data" card → `/sources` → "Mock Pipeline" card → `/live/mock` (dashboard with controls)
+- Start/stop pipeline on `/live/mock` works as before
+- Theme toggle works on all pages
+- Direct URL navigation works for all routes
+- Old routes (`/scenarios/...`) no longer resolve (expected — moved)
 
 ## Doc Updates
 
 After implementation, update `CLAUDE.md` frontend section:
-- Route table: add `/sources` and change `/live` to `/live/[source]`
-- `web/src/app/sources/page.tsx` entry
-- `web/src/app/live/[source]/page.tsx` replaces `web/src/app/live/page.tsx`
+- Route table: add `/sources`, change `/trm` to hub, add `/trm/scenarios`, change `/live` to `/live/[source]`
+- File listing: `web/src/app/trm/page.tsx` is now a hub, add `web/src/app/trm/scenarios/page.tsx`, add `web/src/app/trm/scenarios/[tier]/[scenario]/page.tsx`, add `web/src/app/sources/page.tsx`, `web/src/app/live/[source]/page.tsx` replaces `web/src/app/live/page.tsx`
+- Remove `web/src/app/scenarios/[tier]/[scenario]/page.tsx` reference (moved)
