@@ -12,9 +12,9 @@ The **Thread Routing Module (TRM)** is the intelligence layer. It takes processe
 
 Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for the full phase history.
 
-## Current Phase
+## Current State
 
-**Phase 4 — UI Restructure** is complete. Phases 1 (TRM core), 2 (Web UI + API), 3 (DB + data pipeline), and 4 (UI restructure) are all complete. Phase 5 (data integration — real capture, ASR, radio hardware) is not started (hardware-gated).
+All core systems are built: TRM core, Web UI + API, database + data pipeline, and UI restructure. Real data integration (capture, ASR, radio hardware) is not built — it requires physical radio hardware.
 
 The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has 4 boundary types with `to_orm()` mapping to ORM models. Mock capture (`capture/mock/run.py`) and preprocessing (`preprocessing/mock/run.py`) scripts simulate the full pipeline. `trm/main_live.py` is the DB-driven TRM entry point — polls for processed rows and persists routing results. The `/live` page hydrates from the database on load via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) and polls every 3 seconds for updates.
 
@@ -144,7 +144,7 @@ Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is nee
 - **Stateful LLM**: Full session context is sent every turn. The LLM maintains and updates state, not a stateless classifier.
 - **Two independent decision layers**: Thread and event routing are orthogonal. A thread can have no event; an event can span multiple threads.
 - **Buffering**: Limited buffer slots (default 5) let the LLM defer ambiguous packets. Buffer exhaustion falls back to UNKNOWN.
-- **DB as single source of truth** (Phase 3): All pipeline stages write to the shared database. WebSocket is the live edge only — the DB is the ground truth. Page hydration reads from DB, not from in-memory state.
+- **DB as single source of truth**: All pipeline stages write to the shared database. WebSocket is the live edge only — the DB is the ground truth. Page hydration reads from DB, not from in-memory state.
 - **Scenario tooling stays separate**: Scenarios run against flat files and in-memory state. They do not touch the database. This path is permanent — it exists for development and prompt tuning regardless of what production does.
 
 ## Test Data
@@ -156,7 +156,7 @@ Scenarios live under `data/tier_one/`, `data/tier_two/`, etc. Each scenario fold
 
 Four Tier 1 scenarios exist: `scenario_01_simple_two_party`, `scenario_02_interleaved`, `scenario_03_event_opens_mid_thread`, `scenario_04_three_way_split`.
 
-The augmented dataset for the Phase 3 mock pipeline lives at `data/tier_one/scenario_02_interleaved/packets_radio.json` — same packets with radio metadata added. See `docs/pipeline/database.md` for details.
+The augmented dataset for the mock pipeline lives at `data/tier_one/scenario_02_interleaved/packets_radio.json` — same packets with radio metadata added. See `docs/pipeline/database.md` for details.
 
 ## Docs
 
@@ -172,3 +172,4 @@ The augmented dataset for the Phase 3 mock pipeline lives at `data/tier_one/scen
 | `docs/web/api.md` | Web UI & API architecture — REST endpoints, WebSocket protocol, frontend pages |
 | `docs/web/ui_spec.md` | Visual design spec — design tokens, components, layout |
 | `docs/web/ui_mockup.jsx` | Interactive React mockup — component reference |
+| `docs/vision.md` | What Albatross should become — design intent, not a roadmap |

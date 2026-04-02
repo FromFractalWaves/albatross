@@ -37,11 +37,9 @@ Scenarios are read from the filesystem. No database needed for this — the `dat
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/runs` | Start a new run (body specifies packet source — scenario, or eventually a live feed) |
-| `GET` | `/api/runs` | List past runs (once persistence exists) |
-| `GET` | `/api/runs/{run_id}` | Get completed run results |
+| `POST` | `/api/runs` | Start a new run (body specifies packet source — scenario tier and name) |
 
-A run is a single execution of the TRM runtime against a packet source. Starting a run returns a `run_id` that the frontend uses to connect via WebSocket.
+A run is a single execution of the TRM runtime against a packet source. Starting a run returns a `run_id` that the frontend uses to connect via WebSocket. Runs are in-memory only — no persistence or listing endpoint.
 
 #### WebSocket Protocol
 
@@ -148,9 +146,6 @@ The `api/` layer imports from `trm/` — it wraps the existing pipeline, it does
 
 ---
 
-## Not Yet Implemented
+## What's Not Here
 
-- **Scorer** — plugs into the run-complete flow and the review view when built
-- **Real live ingest** — real radio capture feeding the pipeline. The mock pipeline (`/api/mock/start`) simulates this against the DB; real hardware integration is Phase 5
-- **Multi-run comparison** — comparing results across different runs of the same scenario
-- **Authentication** — local dev tool for now
+This API covers scenarios, runs, live data, and mock pipeline control. For future directions (scorer, real live ingest, multi-run comparison, authentication), see `docs/vision.md`.

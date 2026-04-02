@@ -288,11 +288,6 @@ Packets appear in the UI every ~20 seconds (10s capture + 10s ASR delay). Refres
 
 ---
 
-## Not Yet Implemented
+## What's Not Here
 
-- Real radio capture (hardware-dependent)
-- Real ASR / Whisper integration
-- Scorer
-- UI scenario builder
-- Prompt versioning
-- Multi-run comparison
+The database and mock pipeline are complete. For future directions (real capture, ASR, scorer, scenario builder, prompt versioning, multi-run comparison), see `docs/vision.md`.

@@ -17,7 +17,7 @@ data/
     │   └── README.md
     ├── scenario_02_interleaved/
     │   ├── packets.json
-    │   ├── packets_radio.json      ← augmented for mock pipeline (Phase 3)
+    │   ├── packets_radio.json      ← augmented for mock pipeline
     │   ├── expected_output.json
     │   └── README.md
     ├── scenario_03_event_opens_mid_thread/

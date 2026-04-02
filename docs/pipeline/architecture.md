@@ -62,7 +62,7 @@ TransmissionPacket {
 - WAV file on disk: `out/wav/{timestamp}_{tgid}_{src}_{uuid}.wav`
 - Database record: all `TransmissionPacket` fields, `status = 'captured'`
 
-See `phase_1a_capture_pipeline.md` and the Phase 1A session handoff doc for the full capture architecture, block signatures, and open questions.
+See `docs/pipeline/architecture.md` (this document) for the full capture architecture and open questions.
 
 ---
 

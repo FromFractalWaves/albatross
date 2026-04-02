@@ -207,7 +207,7 @@ Badge styling:
 
 Two badges per packet: one for thread decision (`thr:new`), one for event decision (`evt:none`).
 
-**Phase 6 addition:** In comparison mode, badges get a green or red background override to indicate match/mismatch against expected output.
+**Future:** When comparison mode is built, badges will get a green or red background override to indicate match/mismatch against expected output.
 
 ### Context Inspector
 

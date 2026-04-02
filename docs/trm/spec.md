@@ -34,7 +34,7 @@ Every `ProcessedPacket` conforms to this schema:
 
 The `metadata` field carries domain-specific context forwarded from the upstream Packet — talk group IDs, source unit identifiers, department tags, or whatever signals are relevant to routing decisions in that domain. The TRM is told via configuration what those fields mean and how much weight to give them.
 
-> **Note on naming:** In the radio pipeline, the upstream Packet type is `TransmissionPacket` (defined in the Phase 1A spec) and the TRM input type is `ProcessedTransmissionPacket` — the radio-specific instantiation of `ProcessedPacket`. These are out of scope for this document. The TRM only knows about `ProcessedPacket`.
+> **Note on naming:** In the radio pipeline, the upstream Packet type is `TransmissionPacket` (defined in `contracts/models.py`) and the TRM input type is `ProcessedTransmissionPacket` — the radio-specific instantiation of `ProcessedPacket`. These are out of scope for this document. The TRM only knows about `ProcessedPacket`.
 
 ### The ReadyPacket
 
@@ -369,4 +369,4 @@ In the radio dispatch reference implementation specifically:
 OP25 capture → TransmissionPacket → ASR → ProcessedTransmissionPacket → [queue] → ReadyPacket → [TRM router] → Event store → Web UI
 ```
 
-See the Albatross spec and Phase 1A/1B documentation for the radio-specific types and pipeline details.
+See `docs/albatross.md` for the Albatross pattern and `docs/pipeline/architecture.md` for the radio-specific pipeline details.

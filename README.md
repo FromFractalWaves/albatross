@@ -10,7 +10,7 @@ If you're new here, start with `docs/albatross.md`. Everything else will make mo
 
 ## Phases
 
-Albatross is being built in phases. Each phase is documented separately.
+Albatross was built in phases. Each phase is documented separately.
 
 | Phase | Description | Status | Key Documents |
 |-------|-------------|--------|---------------|
@@ -28,11 +28,14 @@ Albatross is being built in phases. Each phase is documented separately.
 | `docs/albatross.md` | The Albatross pattern — pipeline stages, contracts, how to add a new implementation |
 | `docs/pipeline/architecture.md` | Full radio pipeline architecture — DB schema, stage handoffs, production TRM requirements |
 | `docs/pipeline/database.md` | Database & data pipeline — ORM models, contracts layer, mock pipeline, persistence |
+| `docs/pipeline/mock_pipeline.md` | Mock pipeline end-to-end — stages, status progression, API, frontend, timing |
 | `docs/trm/spec.md` | TRM specification — packet types, routing decisions, golden dataset tiers, scoring metrics |
 | `docs/trm/runtime_loop.md` | TRM runtime loop — context schema, per-packet decision cycle, buffering, open problems |
+| `docs/trm/scenarios.md` | Scenarios system — data layer, API, service layer, web UI, end-to-end flow |
 | `docs/web/api.md` | Web UI & API architecture — REST endpoints, WebSocket protocol, frontend pages |
 | `docs/web/ui_spec.md` | Visual design spec — design tokens, component specs, layout, interaction patterns |
 | `docs/web/ui_mockup.jsx` | Interactive React mockup — component reference |
+| `docs/vision.md` | What Albatross should become — design intent, not a roadmap |
 
 ---
 
@@ -44,7 +47,7 @@ The TRM pipeline runs against four Tier 1 scenarios. The FastAPI backend serves 
 
 The database layer is complete: SQLAlchemy 2.0 async models with Alembic migrations, shared Pydantic boundary types in `contracts/`, and DB-driven TRM routing via `trm/main_live.py`.
 
-The web UI is restructured around a hub pattern: a homepage routes to TRM Tools and Live Data. TRM Tools exposes the scenario runner (with more tools to come). Live Data exposes a source selection page — currently Mock Pipeline, with real radio hardware deferred until Phase 5. The mock pipeline is controlled from the browser: navigate to Live Data → Mock Pipeline → Start.
+The web UI is restructured around a hub pattern: a homepage routes to TRM Tools and Live Data. TRM Tools exposes the scenario runner (with more tools to come). Live Data exposes a source selection page — currently Mock Pipeline, with real radio hardware not yet available. The mock pipeline is controlled from the browser: navigate to Live Data → Mock Pipeline → Start.
 
 ---
 
