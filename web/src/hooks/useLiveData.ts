@@ -98,10 +98,7 @@ export function useLiveData() {
 
         if (!activeRef.current) return;
 
-        if (!threadsRes.ok || !eventsRes.ok || !transmissionsRes.ok) {
-          dispatch({ type: "error", error: "Failed to fetch live data" });
-          return;
-        }
+        if (!threadsRes.ok || !eventsRes.ok || !transmissionsRes.ok) return;
 
         const [threads, events, transmissions] = await Promise.all([
           threadsRes.json(),

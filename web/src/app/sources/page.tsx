@@ -6,7 +6,20 @@ export default function SourcesHub() {
     <div className="min-h-screen bg-base">
       <HubTopBar />
 
-      <div className="flex flex-col items-center justify-center gap-6 p-8 pt-24">
+      <div className="flex flex-col items-center justify-center gap-6 p-8 pt-12">
+        <div className="max-w-2xl w-full flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
+            <Link
+              href="/"
+              className="text-[11px] font-mono uppercase tracking-[0.06em] text-text-muted hover:text-text-secondary transition-colors"
+            >
+              ← Back to Home
+            </Link>
+            <h1 className="text-lg font-bold text-text-primary font-mono tracking-tight">
+              Live Data Sources
+            </h1>
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl w-full">
           <Link
             href="/live/mock"
@@ -16,7 +29,7 @@ export default function SourcesHub() {
               Mock Pipeline
             </span>
             <span className="text-[13px] text-text-muted leading-relaxed">
-              Replays a scenario with full radio metadata, simulating live capture
+              Replays a scenario with full radio metadata through the full pipeline — capture, preprocessing, TRM routing — and streams results into the live dashboard.
             </span>
             <div className="flex items-center gap-1.5 mt-1">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-green" />

@@ -25,7 +25,7 @@ export default function LivePage({
   params: Promise<{ source: string }>;
 }) {
   const { source } = use(params);
-  const { status, context, routingRecords, latestPacketId, error } = useLiveData();
+  const { status, context, routingRecords, latestPacketId } = useLiveData();
 
   const [activeTab, setActiveTab] = useState<Tab>("live");
   const [pipelineStatus, setPipelineStatus] = useState<"running" | "stopped" | "unknown">("unknown");
@@ -149,21 +149,9 @@ export default function LivePage({
           onTabChange={(id) => setActiveTab(id as Tab)}
         />
 
-        {/* Error display */}
-        {error && (
-          <div className="text-accent-red text-sm px-1">Error: {error}</div>
-        )}
-
         {/* Loading state */}
         {status === "loading" && (
           <div className="text-text-muted text-sm px-1">Loading pipeline state...</div>
-        )}
-
-        {/* Empty state */}
-        {status === "empty" && (
-          <div className="text-text-muted text-sm px-1">
-            No routed packets yet. Start the pipeline to see data here.
-          </div>
         )}
 
         {/* LIVE tab content */}
@@ -180,7 +168,9 @@ export default function LivePage({
                 />
               ))}
             </div>
-          ) : null}
+          ) : (
+            <div className="text-text-muted text-sm px-1">No data yet. Start the pipeline to begin.</div>
+          )}
         </div>
 
         {/* EVENTS tab content */}
@@ -219,7 +209,7 @@ export default function LivePage({
               </div>
             </div>
           ) : (
-            <div className="text-text-muted text-sm px-1">No packets routed yet.</div>
+            <div className="text-text-muted text-sm px-1">No transmissions yet.</div>
           )}
         </div>
 
