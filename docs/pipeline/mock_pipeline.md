@@ -1,6 +1,6 @@
-# Mock Live Pipeline — End-to-End Reference
+# Mock Pipeline — End-to-End Reference
 
-How the mock pipeline, API, and live UI work together.
+*How the mock pipeline, API, and live UI work together.*
 
 ---
 

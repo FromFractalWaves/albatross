@@ -160,6 +160,7 @@ The augmented dataset for the Phase 3 mock pipeline lives at `data/tier_one/scen
 | `docs/albatross.md` | Start here — the Albatross pattern, pipeline stages, phase history |
 | `docs/pipeline/architecture.md` | Full radio pipeline architecture — DB schema, stage handoffs, production TRM requirements |
 | `docs/pipeline/database.md` | Database & data pipeline — ORM models, contracts layer, mock pipeline, persistence |
+| `docs/pipeline/mock_pipeline.md` | Mock pipeline end-to-end — stages, status progression, API, frontend, timing |
 | `docs/trm/spec.md` | TRM spec — packet types, routing decisions, golden dataset tiers, scoring |
 | `docs/trm/runtime_loop.md` | TRM runtime loop — context schema, per-packet decision cycle, buffering |
 | `docs/trm/scenarios.md` | Scenarios system — data layer, API, service layer, web UI, end-to-end flow |

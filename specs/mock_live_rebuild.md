@@ -2,7 +2,7 @@
 
 **Status:** Draft  
 **Scope:** Rebuild `/sources`, `/live/[source]`, and mock pipeline API controls end-to-end  
-**Reference:** `specs/mock_live_fix_info.md` — full end-to-end documentation of how the mock pipeline works
+**Reference:** `docs/pipeline/mock_pipeline.md` — full end-to-end documentation of how the mock pipeline works
 
 ---
 

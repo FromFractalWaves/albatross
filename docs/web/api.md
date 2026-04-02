@@ -92,6 +92,8 @@ The `packet_routed` message includes `incoming_packet` as a top-level sibling fi
 
 The start endpoint resets all DB tables, then launches `capture/mock/run.py`, `preprocessing/mock/run.py`, and `trm/main_live.py` as subprocesses. Process handles are stored in `app.state.mock_processes`. The scripts have built-in idle timeouts, so the stop endpoint is for early termination.
 
+> For the full mock pipeline reference — stages, status progression, timing, API response shapes, and frontend integration — see `docs/pipeline/mock_pipeline.md`.
+
 ### Frontend (Next.js + TypeScript)
 
 #### Pages

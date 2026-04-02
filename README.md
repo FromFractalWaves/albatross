@@ -17,6 +17,7 @@ Albatross is being built in phases. Each phase is documented separately.
 | **Phase 1** — TRM Core | Async packet pipeline, LLM-backed thread and event router, Tier 1 scenario dataset | Complete | `docs/trm/spec.md`, `docs/trm/runtime_loop.md` |
 | **Phase 2** — Web UI & API | FastAPI backend, WebSocket streaming, Next.js dashboard with live run visualization | Complete | `docs/web/api.md` |
 | **Phase 3** — Database & Data Pipeline | Shared DB, contracts layer, mock pipeline, UI hydration from DB | Complete | `docs/pipeline/database.md` |
+| **Phase 4** — Web UI Restructure | Homepage hub, TRM tools hub, live data source selection, mock pipeline UI controls | Complete | `docs/web/ui_spec.md` |
 
 ---
 
@@ -37,9 +38,13 @@ Albatross is being built in phases. Each phase is documented separately.
 
 ## Status
 
-Phase 1 and Phase 2 are complete. The TRM pipeline runs against four Tier 1 scenarios. The FastAPI backend serves scenario data and streams live runs over WebSocket. The Next.js frontend renders a live dashboard — thread lanes, events view, chronological timeline, decision badges.
+Phases 1 through 4 are complete.
 
-Phase 3 is complete. SQLAlchemy 2.0 async models with Alembic migrations, shared Pydantic boundary types in `contracts/`, mock capture/preprocessing scripts, DB-driven TRM routing (`trm/main_live.py`), and UI hydration from the database are all in place.
+The TRM pipeline runs against four Tier 1 scenarios. The FastAPI backend serves scenario data and streams live runs over WebSocket. The Next.js frontend has a full dashboard — thread lanes, events view, chronological timeline, decision badges.
+
+The database layer is complete: SQLAlchemy 2.0 async models with Alembic migrations, shared Pydantic boundary types in `contracts/`, and DB-driven TRM routing via `trm/main_live.py`.
+
+The web UI is restructured around a hub pattern: a homepage routes to TRM Tools and Live Data. TRM Tools exposes the scenario runner (with more tools to come). Live Data exposes a source selection page — currently Mock Pipeline, with real radio hardware deferred until Phase 5. The mock pipeline is controlled from the browser: navigate to Live Data → Mock Pipeline → Start.
 
 ---
 
@@ -60,12 +65,16 @@ cd web && npm run dev
 alembic upgrade head
 ```
 
-**Mock pipeline (capture + preprocessing + TRM):**
+**Mock pipeline:**
+
+The mock pipeline is controlled from the web UI. Navigate to Live Data → Mock Pipeline → Start. This resets the database and launches the full pipeline stack automatically.
+
+To run manually (for debugging):
 ```bash
-python db/reset.py                  # clear all tables
-python preprocessing/mock/run.py &  # start preprocessing (polls for captured rows)
-python capture/mock/run.py &        # start capture (writes packets to DB)
-python trm/main_live.py             # start TRM (polls for processed rows, routes + persists)
+python db/reset.py                   # clear all tables
+python preprocessing/mock/run.py &   # start preprocessing (polls for captured rows)
+python capture/mock/run.py &         # start capture (writes packets to DB)
+python trm/main_live.py              # start TRM (polls for processed rows, routes + persists)
 ```
 
 **Tests:**
