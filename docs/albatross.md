@@ -166,5 +166,5 @@ Albatross is built in phases. Each phase has its own document.
 | **Phase 1** | TRM core — async packet pipeline, LLM-backed router, four Tier 1 scenarios | Complete | `docs/trm/spec.md`, `docs/trm/runtime_loop.md` |
 | **Phase 2** | Web UI + API — FastAPI backend, WebSocket streaming, Next.js dashboard | Complete | `docs/web/api.md` |
 | **Phase 3** | Database + inter-module data pipeline — shared DB, contracts layer, mock pipeline, UI hydration | Complete | `docs/pipeline/database.md` |
-| **Phase 4** | UI restructure — homepage hub, Albatross branding, dark/light theme, mock pipeline API controls | In progress | `specs/webui_restruct_buildplan.md` |
+| **Phase 4** | UI restructure — homepage hub, Albatross branding, dark/light theme, mock pipeline API controls, route restructure (`/sources`, `/trm` hub, `/live/[source]`) | Complete | `specs/webui_restruct_buildplan.md` |
 | **Phase 5** | Data integration — real capture, ASR, radio hardware | Not started (hardware-gated) | — |

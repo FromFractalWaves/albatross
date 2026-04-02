@@ -268,7 +268,7 @@ Three GET endpoints in `api/routes/live.py`, all using `Depends(get_session)`:
 
 Response shapes mirror the TypeScript types in `web/src/types/trm.ts`. Queries avoid N+1 — each endpoint runs 2-3 flat queries and assembles in Python.
 
-The `/live` page uses `useLiveData` hook — fetches all three endpoints on mount, reconstructs `TRMContext`, polls every 3 seconds. Same dashboard components as the run page, minus `IncomingBanner`/`BufferZone` (transient state not persisted to DB).
+The `/live/[source]` page uses `useLiveData` hook — fetches all three endpoints on mount, reconstructs `TRMContext`, polls every 3 seconds. Same dashboard components as the run page, minus `IncomingBanner`/`BufferZone` (transient state not persisted to DB).
 
 ---
 

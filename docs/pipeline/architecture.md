@@ -139,12 +139,12 @@ Plus thread and event state updates.
 This stage is everything after the TRM. It is fully domain-agnostic — it reads threads, events, and packets from the database. It does not know about radio, ASR, or talkgroups.
 
 Consumers include:
-- **Web UI** — live thread/event dashboard (the existing Next.js frontend, reading from the DB instead of in-memory state)
+- **Web UI** — live thread/event dashboard (the Next.js frontend at `/live/[source]`, hydrates from the DB on load and polls every 3s)
 - **Reports** — incident summaries, shift reports, daily digests
 - **Alerts** — pattern-based notifications (e.g. "new event on TGID X", "thread exceeded N packets")
 - **Search** — full-text search across packet text, filtered by thread/event/talkgroup/time
 
-None of these are built yet. The web UI exists but currently reads from the in-memory WebSocket stream. Migrating it to read from the database is a future step.
+The web UI reads from the database via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`). Reports, alerts, and search are not yet built.
 
 ---
 
@@ -354,7 +354,7 @@ This is an evolution of the existing architecture, not a replacement.
 - **ASR architecture.** Multi-pass ASR is specified but not built. The number of passes, model selection, and confidence thresholds are all TBD. The database schema accommodates whatever ASR produces.
 - **Context window management.** How to keep the TRM context from growing without bound in production. Windowing vs. summarization vs. hybrid. Needs experimentation once the TRM is running against real radio traffic.
 - **Thread/event close policy.** When does a thread close? When does an event close? Inactivity timeout? LLM decision? Both? Needs design against real traffic patterns.
-- **ORM vs. raw SQL.** SQLAlchemy, Tortoise ORM, or raw queries with asyncpg/aiosqlite. Decision deferred.
+- **~~ORM vs. raw SQL.~~** Resolved — SQLAlchemy 2.0 async ORM. See `docs/pipeline/database.md`.
 - **Audio storage.** Currently local filesystem. Production may need object storage (S3, MinIO) for durability and access. The `audio_path` field in the schema is a string that can point to either.
 
 ---

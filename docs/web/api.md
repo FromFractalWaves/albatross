@@ -96,15 +96,19 @@ The start endpoint resets all DB tables, then launches `capture/mock/run.py`, `p
 
 #### Pages
 
-**`/` — Homepage Hub.** Minimal landing page with two cards linking to `/trm` (TRM Tools) and `/live` (Live Data). No data fetching.
+**`/` — Homepage Hub.** Minimal landing page with two cards linking to `/trm` (TRM Tools) and `/sources` (Live Data). No data fetching.
 
-**`/trm` — Scenario Hub.** Lists all scenarios grouped by tier, fetched from `GET /api/scenarios`. Tabs for SCENARIOS (active), LIVE, HISTORY. Links to individual scenario detail pages.
+**`/trm` — TRM Tools Hub.** Card linking to `/trm/scenarios`. Hub layout matching the homepage card style.
+
+**`/trm/scenarios` — Scenario Browser.** Lists all scenarios grouped by tier, fetched from `GET /api/scenarios`. Tabs for SCENARIOS (active), LIVE, HISTORY. Links to individual scenario detail pages at `/trm/scenarios/{tier}/{scenario}`.
+
+**`/trm/scenarios/{tier}/{scenario}` — Scenario Detail.** Shows README, packet list, expected output (collapsible), run configuration (speed factor, buffer count). "Run This Scenario" button launches a run and redirects to the live view. Back-link points to `/trm/scenarios`.
+
+**`/sources` — Source Selection Hub.** Card for Mock Pipeline linking to `/live/mock`. Static "available" status indicator.
 
 **`/run/{run_id}` — Live Run View.** The main screen. During a run: incoming packet highlighted, active threads as columns/lanes with packets stacking, active events with thread links, routing decision badge, buffered packets in a holding area, buffer counter.
 
-**`/scenarios/{tier}/{scenario}` — Scenario Detail.** Shows README, packet list, expected output (collapsible), run configuration (speed factor, buffer count). "Run This Scenario" button launches a run and redirects to the live view. Back-link points to `/trm`.
-
-**`/live` — Live Pipeline.** DB-hydrated dashboard with mock pipeline controls (Start/Stop buttons, status indicator). Same components as the run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3 seconds via `useLiveData` hook.
+**`/live/[source]` — Live Pipeline.** DB-hydrated dashboard, dynamic by source. Mock pipeline controls (Start/Stop buttons, status indicator) shown when source is "mock". Same components as the run page, minus IncomingBanner/BufferZone (transient state). Polls DB every 3 seconds via `useLiveData` hook.
 
 #### Key UI Components
 
