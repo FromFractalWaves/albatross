@@ -49,7 +49,7 @@ async def test_status_stopped_by_default():
         resp = await client.get("/api/mock/status")
 
     assert resp.status_code == 200
-    assert resp.json() == {"status": "stopped"}
+    assert resp.json()["status"] == "stopped"
 
 
 @pytest.mark.asyncio
@@ -69,7 +69,7 @@ async def test_status_running():
         pass
 
     assert resp.status_code == 200
-    assert resp.json() == {"status": "running"}
+    assert resp.json()["status"] == "running"
 
 
 @pytest.mark.asyncio

@@ -28,7 +28,10 @@ async def stop_mock(request: Request):
 @router.get("/api/mock/status")
 async def mock_status(request: Request):
     manager = request.app.state.live_pipeline_manager
-    return {"status": manager.status}
+    return {
+        "status": manager.status,
+        "stages": [s.model_dump() for s in manager.pipeline_stages],
+    }
 
 
 @router.websocket("/ws/live/mock")

@@ -35,9 +35,15 @@ export type WSMessage =
 
 // ── Live pipeline messages ──────────────────────────────────────────
 
+export interface PipelineStageDefinition {
+  id: string;
+  label: string;
+  message_type: string;
+}
+
 export interface PipelineStartedMessage {
   type: "pipeline_started";
-  total_packets: number;
+  stages: PipelineStageDefinition[];
 }
 
 export interface PacketCapturedMessage {

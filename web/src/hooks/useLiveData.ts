@@ -10,10 +10,12 @@ import type {
   TRMContext,
 } from "@/types/trm";
 import type { ThreadDecision, EventDecision } from "@/types/trm";
-import type { LiveWSMessage } from "@/types/websocket";
+import type { LiveWSMessage, PipelineStageDefinition } from "@/types/websocket";
 import { API_BASE, WS_BASE } from "@/lib/api";
 
 export type LiveStatus = "loading" | "connecting" | "running" | "ready" | "empty" | "error";
+
+export type StageState = PipelineStageDefinition & { count: number };
 
 interface TransmissionRow {
   id: string;
@@ -56,7 +58,7 @@ export function useLiveData() {
   const [wsConnected, setWsConnected] = useState(false);
   const [incomingPacket, setIncomingPacket] = useState<ReadyPacket | null>(null);
   const [wsError, setWsError] = useState<string | null>(null);
-  const [pipelineTotal, setPipelineTotal] = useState<number | null>(null);
+  const [stages, setStages] = useState<StageState[]>([]);
 
   // Hydration queries — fetch on mount, stale after 30s
   const threads = useQuery({
@@ -96,12 +98,26 @@ export function useLiveData() {
     ws.onmessage = (event) => {
       const msg: LiveWSMessage = JSON.parse(event.data);
 
+      const incrementStage = (messageType: string) => {
+        setStages((prev) =>
+          prev.map((s) =>
+            s.message_type === messageType ? { ...s, count: s.count + 1 } : s,
+          ),
+        );
+      };
+
       switch (msg.type) {
         case "pipeline_started":
-          setPipelineTotal(msg.total_packets);
+          setStages(msg.stages.map((s) => ({ ...s, count: 0 })));
+          break;
+
+        case "packet_captured":
+        case "packet_preprocessed":
+          incrementStage(msg.type);
           break;
 
         case "packet_routed": {
+          incrementStage(msg.type);
           // Update context directly from the message
           const ctx = msg.context as TRMContext;
           queryClient.setQueryData(["live", "threads"], ctx.active_threads);
@@ -217,6 +233,7 @@ export function useLiveData() {
     routingRecords,
     latestPacketId,
     incomingPacket,
+    stages,
     error: wsError ?? threads.error?.message ?? events.error?.message ?? transmissions.error?.message ?? null,
   };
 }

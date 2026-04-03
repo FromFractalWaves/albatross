@@ -79,7 +79,7 @@ captured → processing → processed → routing → routed
 
 | Message Type | When | Payload |
 |-------------|------|---------|
-| `pipeline_started` | Pipeline begins | `total_packets` |
+| `pipeline_started` | Pipeline begins | `stages` (list of `PipelineStageDefinition`) |
 | `packet_captured` | Packet written to DB | `packet_id`, `timestamp`, `metadata` |
 | `packet_preprocessed` | ASR complete | `packet_id`, `text` |
 | `packet_routed` | TRM routing complete | `packet_id`, `routing_record`, `context`, `incoming_packet` |

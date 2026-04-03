@@ -6,12 +6,12 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import WebSocket
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from starlette.websockets import WebSocketState
 
+from api.services.base_pipeline import BasePipelineManager
 from contracts.models import ReadyPacket, RoutingRecord, TransmissionPacket
+from contracts.ws import PipelineStageDefinition
 from db.models import Transmission
 from db.persist import persist_routing_result
 from db.reset import reset as reset_db
@@ -32,58 +32,18 @@ CAPTURE_INTERVAL = 10  # seconds between captured packets
 ASR_DELAY = 3          # simulated ASR processing time
 
 
-class LivePipelineManager:
-    def __init__(self):
-        self._task: asyncio.Task | None = None
-        self._subscribers: list[WebSocket] = []
-        self._messages: list[dict] = []
+class LivePipelineManager(BasePipelineManager):
 
     @property
-    def status(self) -> str:
-        if self._task is not None and not self._task.done():
-            return "running"
-        return "stopped"
+    def pipeline_stages(self) -> list[PipelineStageDefinition]:
+        return [
+            PipelineStageDefinition(id="capture", label="Capture", message_type="packet_captured"),
+            PipelineStageDefinition(id="preprocessing", label="Preprocessing", message_type="packet_preprocessed"),
+            PipelineStageDefinition(id="routing", label="TRM Routing", message_type="packet_routed"),
+        ]
 
-    async def start(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        # Stop any existing run
-        if self._task is not None and not self._task.done():
-            await self.stop()
-
-        # Clear state from previous run
-        self._messages.clear()
-
-        # Reset the database
+    async def _pre_run(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         await reset_db()
-
-        self._task = asyncio.create_task(self._run_pipeline(session_factory))
-
-    async def stop(self) -> None:
-        if self._task is not None and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        self._task = None
-
-    def subscribe(self, ws: WebSocket) -> None:
-        self._subscribers.append(ws)
-
-    def unsubscribe(self, ws: WebSocket) -> None:
-        if ws in self._subscribers:
-            self._subscribers.remove(ws)
-
-    async def _broadcast(self, message: dict) -> None:
-        self._messages.append(message)
-        dead: list[WebSocket] = []
-        for ws in self._subscribers:
-            try:
-                if ws.client_state == WebSocketState.CONNECTED:
-                    await ws.send_json(message)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self._subscribers.remove(ws)
 
     async def _run_pipeline(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         try:
@@ -95,7 +55,7 @@ class LivePipelineManager:
 
             await self._broadcast({
                 "type": "pipeline_started",
-                "total_packets": total,
+                "stages": [s.model_dump() for s in self.pipeline_stages],
             })
 
             capture_queue: PacketQueue = PacketQueue()

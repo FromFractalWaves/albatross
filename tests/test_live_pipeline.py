@@ -9,11 +9,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from starlette.testclient import TestClient
 
 from api.main import app
+from api.services.base_pipeline import BasePipelineManager
 from api.services.live_pipeline import LivePipelineManager
 from contracts.models import ReadyPacket, RoutingRecord
+from contracts.ws import PipelineStageDefinition
 from db.base import Base
 from trm.models.router import TRMContext
 import db.models  # noqa: F401
+
+
+MOCK_STAGES = [
+    {"id": "capture", "label": "Capture", "message_type": "packet_captured"},
+    {"id": "preprocessing", "label": "Preprocessing", "message_type": "packet_preprocessed"},
+    {"id": "routing", "label": "TRM Routing", "message_type": "packet_routed"},
+]
 
 
 def _make_mock_router():
@@ -136,7 +145,7 @@ def test_websocket_receives_backlog():
     manager = LivePipelineManager()
     # Manually populate backlog
     manager._messages = [
-        {"type": "pipeline_started", "total_packets": 2},
+        {"type": "pipeline_started", "stages": MOCK_STAGES},
         {"type": "packet_captured", "packet_id": "pkt_001", "timestamp": "2024-01-01T00:00:00Z", "metadata": {}},
         {"type": "packet_preprocessed", "packet_id": "pkt_001", "text": "hello"},
         {"type": "packet_routed", "packet_id": "pkt_001", "routing_record": {}, "context": {}, "incoming_packet": None},
@@ -169,7 +178,7 @@ def test_websocket_two_clients_receive_backlog():
     """Two clients connecting should both receive the backlog."""
     manager = LivePipelineManager()
     manager._messages = [
-        {"type": "pipeline_started", "total_packets": 1},
+        {"type": "pipeline_started", "stages": MOCK_STAGES},
         {"type": "pipeline_complete", "total_packets": 1, "routing_records": []},
     ]
     app.state.live_pipeline_manager = manager
@@ -183,3 +192,51 @@ def test_websocket_two_clients_receive_backlog():
                 assert msg2["type"] == "pipeline_started"
 
     app.state.live_pipeline_manager = LivePipelineManager()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_started_contains_stages(pipeline_session_factory):
+    """pipeline_started message should contain stages with correct definitions and no total_packets."""
+    manager = LivePipelineManager()
+
+    with _fast_pipeline()[0], _fast_pipeline()[1], _fast_pipeline()[2], _fast_pipeline()[3]:
+        await manager.start(pipeline_session_factory)
+
+        for _ in range(120):
+            if manager.status == "stopped":
+                break
+            await asyncio.sleep(0.25)
+
+        started = next(m for m in manager._messages if m["type"] == "pipeline_started")
+        assert "total_packets" not in started
+        assert "stages" in started
+        assert len(started["stages"]) == 3
+        assert started["stages"][0]["id"] == "capture"
+        assert started["stages"][1]["id"] == "preprocessing"
+        assert started["stages"][2]["id"] == "routing"
+        for stage in started["stages"]:
+            assert "id" in stage
+            assert "label" in stage
+            assert "message_type" in stage
+
+
+def test_status_endpoint_returns_stages():
+    """GET /api/mock/status should include stages list."""
+    app.state.live_pipeline_manager = LivePipelineManager()
+
+    with TestClient(app) as client:
+        response = client.get("/api/mock/status")
+        data = response.json()
+        assert "stages" in data
+        assert len(data["stages"]) == 3
+        assert data["stages"][0]["id"] == "capture"
+        assert data["stages"][1]["message_type"] == "packet_preprocessed"
+        assert data["stages"][2]["label"] == "TRM Routing"
+
+    app.state.live_pipeline_manager = LivePipelineManager()
+
+
+def test_base_pipeline_manager_is_abstract():
+    """BasePipelineManager cannot be instantiated directly."""
+    with pytest.raises(TypeError):
+        BasePipelineManager()

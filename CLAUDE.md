@@ -16,7 +16,7 @@ Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for 
 
 All core systems are built: TRM core, Web UI + API, database + data pipeline, and UI restructure. Real data integration (capture, ASR, radio hardware) is not built — it requires physical radio hardware.
 
-The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has boundary types with `to_orm()` mapping to ORM models, plus WebSocket message types in `contracts/ws.py`. The mock pipeline runs as an in-process async pipeline inside the API via `LivePipelineManager` (`api/services/live_pipeline.py`), pushing stage-level messages (`packet_captured`, `packet_preprocessed`, `packet_routed`) over WebSocket at `/ws/live/mock`. The `/live` page hydrates from the database on load via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) using TanStack Query, then receives real-time updates via WebSocket — no polling.
+The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has boundary types with `to_orm()` mapping to ORM models, plus WebSocket message types in `contracts/ws.py` (including `PipelineStageDefinition` for pipeline observability). The mock pipeline runs as an in-process async pipeline inside the API via `LivePipelineManager` (`api/services/live_pipeline.py`), which inherits from `BasePipelineManager` (`api/services/base_pipeline.py`). It pushes stage-level messages (`packet_captured`, `packet_preprocessed`, `packet_routed`) over WebSocket at `/ws/live/mock`. `PipelineStarted` carries `stages` (list of stage definitions) instead of `total_packets`. The `/live` page hydrates from the database on load via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) using TanStack Query, then receives real-time updates via WebSocket — no polling. A `PipelineStages` component shows per-stage packet counts that increment in real time.
 
 The existing scenario tooling (`data/`, `api/`, `trm/`, `web/`) is **not being replaced** — it continues to work as-is for development and tuning.
 
@@ -60,7 +60,7 @@ The CLI entry point is `trm/main.py`. The API entry point is `api/main.py` (Fast
 Shared Pydantic types for cross-module boundaries. All modules import boundary types from `contracts/`, not from each other.
 
 - **`contracts/models.py`** — `TransmissionPacket` (capture output, with `to_orm()` method), `ProcessedPacket` (TRM input, domain-agnostic), `ReadyPacket` (alias for `ProcessedPacket`), `RoutingRecord` (TRM output, plain string decision fields, with `to_orm()` method).
-- **`contracts/ws.py`** — Pydantic models for live pipeline WebSocket messages: `PipelineStarted`, `PacketCaptured`, `PacketPreprocessed`, `PacketRouted`, `PipelineComplete`, `PipelineError`.
+- **`contracts/ws.py`** — Pydantic models for live pipeline WebSocket messages: `PipelineStageDefinition`, `PipelineStarted` (carries `stages` list, not `total_packets`), `PacketCaptured`, `PacketPreprocessed`, `PacketRouted`, `PipelineComplete`, `PipelineError`.
 
 ### Mock Pipeline (`capture/`, `preprocessing/`, `api/services/live_pipeline.py`)
 
@@ -106,7 +106,8 @@ FastAPI backend that wraps the TRM pipeline. The `api/` layer imports from `trm/
 - **`api/routes/live.py`** — `GET /api/live/threads` (open threads with packets), `GET /api/live/events` (open events with thread IDs), `GET /api/live/transmissions` (routed transmissions ordered by timestamp). All use `Depends(get_session)` for DB access.
 - **`api/routes/mock.py`** — `POST /api/mock/start` (reset DB + start in-process pipeline), `POST /api/mock/stop` (cancel pipeline), `GET /api/mock/status` (check if running), `ws://localhost:8000/ws/live/mock` (live pipeline WebSocket). Uses `LivePipelineManager` from `app.state`.
 - **`api/services/runner.py`** — `RunManager` orchestrates scenario runs as background asyncio tasks, broadcasts `run_started`, `packet_routed`, `run_complete` messages over WebSocket. Runs are in-memory (no persistence yet). The `packet_routed` message includes `context` (with `incoming_packet` popped out) and `incoming_packet` as a sibling field. Clients connecting mid-run receive the full message backlog.
-- **`api/services/live_pipeline.py`** — `LivePipelineManager` orchestrates the mock pipeline as a single asyncio task with three concurrent stages (capture, preprocessing, routing). Broadcasts stage-level messages (`pipeline_started`, `packet_captured`, `packet_preprocessed`, `packet_routed`, `pipeline_complete`) over WebSocket. Late-joining clients receive the full message backlog.
+- **`api/services/base_pipeline.py`** — `BasePipelineManager` abstract base class for pipeline managers. Provides lifecycle (start/stop), WebSocket subscriber fanout, message backlog, and stage metadata. Subclasses implement `pipeline_stages` (property) and `_run_pipeline` (async method). See `docs/pipeline/new_pipelines.md` for how to add new pipelines.
+- **`api/services/live_pipeline.py`** — `LivePipelineManager` (inherits `BasePipelineManager`) orchestrates the mock pipeline as a single asyncio task with three concurrent stages (capture, preprocessing, routing). Declares its stages via `pipeline_stages` property. Broadcasts stage-level messages (`pipeline_started`, `packet_captured`, `packet_preprocessed`, `packet_routed`, `pipeline_complete`) over WebSocket. Late-joining clients receive the full message backlog.
 
 ### Frontend (`web/`)
 
@@ -115,10 +116,10 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 - **`web/src/types/trm.ts`** — TypeScript interfaces mirroring the Pydantic models: `ReadyPacket`, `Thread`, `Event`, `RoutingRecord`, `TRMContext`.
 - **`web/src/types/websocket.ts`** — Discriminated unions for WebSocket messages: `WSMessage` (scenario runs: `RunStarted`, `PacketRouted`, `RunComplete`, `RunError`) and `LiveWSMessage` (live pipeline: `PipelineStarted`, `PacketCaptured`, `PacketPreprocessed`, `LivePacketRouted`, `PipelineComplete`, `PipelineError`).
 - **`web/src/hooks/useRunSocket.ts`** — Custom hook that opens a WebSocket to a run, parses messages, and maintains state via `useReducer`. Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, error, scenario }`.
-- **`web/src/hooks/useLiveData.ts`** — Custom hook for the live page. Hydrates from REST via TanStack Query on mount, then receives real-time updates via WebSocket at `/ws/live/mock`. Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, error }`.
+- **`web/src/hooks/useLiveData.ts`** — Custom hook for the live page. Hydrates from REST via TanStack Query on mount, then receives real-time updates via WebSocket at `/ws/live/mock`. Tracks per-stage packet counts via TanStack Query cache (`["live", "stages"]`). Returns `{ status, context, routingRecords, latestPacketId, incomingPacket, stages, error }`.
 - **`web/src/hooks/useTheme.ts`** — Dark/light theme toggle hook. Reads/writes `localStorage`, toggles `dark`/`light` class on `<html>`. SSR-safe.
 - **`web/src/lib/`** — `utils.ts` (cn helper), `threadColors.ts` (rotating color palette for threads), `packetDecisions.ts` (joins routing records to packets by ID), `api.ts` (API_BASE and WS_BASE constants).
-- **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`, `HubTopBar`, `TabBar`, `ThemeToggle`.
+- **`web/src/components/`** — Dashboard components: `Badge`, `DecisionBadge`, `SectionHeader`, `PacketCard`, `ThreadLane`, `EventCard`, `TimelineRow`, `BufferZone`, `IncomingBanner`, `TopBar`, `ContextInspector`, `HubTopBar`, `TabBar`, `ThemeToggle`, `PipelineStages`.
 - **`web/src/app/page.tsx`** — Homepage hub: two cards linking to `/trm` (TRM Tools) and `/sources` (Live Data).
 - **`web/src/app/trm/page.tsx`** — TRM Tools hub: card linking to `/trm/scenarios`.
 - **`web/src/app/trm/scenarios/page.tsx`** — Scenario browser: lists tiers and scenarios, links to detail pages.
@@ -129,7 +130,7 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 55 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), and live pipeline/WebSocket (6 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 58 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), and live pipeline/WebSocket (9 tests).
 
 ### Key Design Decisions
 
@@ -158,6 +159,7 @@ The augmented dataset for the mock pipeline lives at `data/tier_one/scenario_02_
 | `docs/pipeline/architecture.md` | Full radio pipeline architecture — DB schema, stage handoffs, production TRM requirements |
 | `docs/pipeline/database.md` | Database & data pipeline — ORM models, contracts layer, mock pipeline, persistence |
 | `docs/pipeline/mock_pipeline.md` | Mock pipeline end-to-end — stages, status progression, API, frontend, timing |
+| `docs/pipeline/new_pipelines.md` | How to add a new pipeline — inherit BasePipelineManager, declare stages, add routes |
 | `docs/trm/spec.md` | TRM spec — packet types, routing decisions, golden dataset tiers, scoring |
 | `docs/trm/runtime_loop.md` | TRM runtime loop — context schema, per-packet decision cycle, buffering |
 | `docs/trm/scenarios.md` | Scenarios system — data layer, API, service layer, web UI, end-to-end flow |

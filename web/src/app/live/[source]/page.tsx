@@ -12,6 +12,7 @@ import { TimelineRow } from "@/components/TimelineRow";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TabBar } from "@/components/TabBar";
 import { ContextInspector } from "@/components/ContextInspector";
+import { PipelineStages } from "@/components/PipelineStages";
 
 type Tab = "live" | "events" | "timeline";
 
@@ -25,7 +26,7 @@ export default function LivePage({
   params: Promise<{ source: string }>;
 }) {
   const { source } = use(params);
-  const { status, context, routingRecords, latestPacketId, incomingPacket } = useLiveData();
+  const { status, context, routingRecords, latestPacketId, incomingPacket, stages } = useLiveData();
 
   const [activeTab, setActiveTab] = useState<Tab>("live");
   const [pipelineStatus, setPipelineStatus] = useState<"running" | "stopped" | "unknown">("unknown");
@@ -110,6 +111,8 @@ export default function LivePage({
         speedFactor={null}
         hideBuffers
       />
+
+      <PipelineStages stages={stages} />
 
       <div className="flex flex-col gap-3.5 p-4 px-5">
         {/* Pipeline Controls (mock source only) */}

@@ -5,9 +5,15 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel
 
 
+class PipelineStageDefinition(BaseModel):
+    id: str
+    label: str
+    message_type: str
+
+
 class PipelineStarted(BaseModel):
     type: Literal["pipeline_started"] = "pipeline_started"
-    total_packets: int
+    stages: list[PipelineStageDefinition] = []
 
 
 class PacketCaptured(BaseModel):
