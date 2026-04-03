@@ -11,20 +11,21 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
 
 1. **Read the spec.** Read the file at the given path. Understand what is being asked for — features, changes, goals, constraints.
 
-2. **Explore the repo.** Investigate the current codebase to understand:
-   - What already exists that the spec touches or depends on
-   - Current naming conventions, patterns, and architecture
-   - Where the spec's terminology doesn't match the repo (e.g., wrong file names, outdated module names, features that already exist)
-   - What can be reused vs. what needs to be built from scratch
-   - Read `CLAUDE.md` for current architecture and conventions
+2. **Build the references list.** Inventory every file in the repo that the spec touches or depends on. Not just files that will be modified — also files that contain patterns to follow, utilities to reuse, docs that describe the affected area, and tests that cover it. Categorize as:
+   - **Pre-build references** — files that exist now and are relevant to the work
+   - **Post-build references** — new files the plan will create
 
-3. **Identify misalignments.** The spec may have been written without repo context. Flag and resolve:
+   Read `CLAUDE.md` for current architecture and conventions. Actually read each referenced file to confirm it exists and understand what it contains.
+
+3. **Summarize current state.** Using the references, write a plain-language summary of how the affected system works *right now*. Not a file-by-file description — a coherent explanation of the flow, the patterns, the boundaries. This grounds the misalignment detection and gives the builder full context before making changes.
+
+4. **Identify misalignments.** The spec may have been written without repo context. Flag and resolve — grounded in the references and current state summary, not ad hoc exploration:
    - References to files, modules, or patterns that don't exist or are named differently
    - Features described as "new" that are partially or fully implemented
    - Architectural assumptions that conflict with how the project actually works
    - Missing dependencies or prerequisites the spec doesn't mention
 
-4. **Write misalignments report.** If there are any misalignments, write them to a separate file next to the spec. If the spec is `specs/foo.md`, write misalignments to `specs/foo_misalignments.md`. This file is for the user to review — it is not part of the build plan. Format:
+5. **Write misalignments report.** If there are any misalignments, write them to a separate file next to the spec. If the spec is `specs/foo.md`, write misalignments to `specs/foo_misalignments.md`. This file is for the user to review — it is not part of the build plan. Format:
 
    ```markdown
    # Misalignments: [Title]
@@ -42,7 +43,23 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
 
    Omit this file entirely if there are no misalignments.
 
-5. **Produce the build plan.** Write the build plan to a new file next to the spec. If the spec is `specs/foo.md`, write the plan to `specs/foo_buildplan.md`. The original spec is preserved unchanged. The build plan includes:
+6. **Write the summaries file.** Write the current state summary and target state summary to `specs/foo_summaries.md`. This file is for the user to verify understanding and for AI context during building. Format:
+
+   ```markdown
+   # Summaries: [Title]
+
+   _Spec: `specs/foo.md` — reviewed against repo on [date]_
+
+   ## Current State
+
+   [Plain-language summary of how the affected system works right now. Cover the flow, patterns, and boundaries — not a file-by-file inventory. Scope: only what changes, plus the immediate boundaries.]
+
+   ## Target State
+
+   [Plain-language summary of how the affected system will work after the build plan is executed. Same scope and style as current state. This is the "done" picture — the builder verifies against it, and the docs skill can diff current vs target to know what changed.]
+   ```
+
+7. **Produce the build plan.** Write the build plan to `specs/foo_buildplan.md`. The original spec is preserved unchanged. The build plan includes:
 
    ```markdown
    # Build Plan: [Title]
@@ -52,8 +69,19 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
    ## Goal
    [1-2 sentence summary of what this achieves]
 
-   ## Context
-   [What already exists in the repo that this builds on. Reference actual file paths.]
+   **Context:** See `specs/foo_summaries.md` for current and target state.
+
+   ## References
+
+   ### Pre-build
+   | File | What it is | Why it's relevant |
+   |------|-----------|-------------------|
+   | `path/to/file.py` | [description] | [reason] |
+
+   ### Post-build
+   | File | What it will be | Why it's needed |
+   |------|----------------|-----------------|
+   | `path/to/new_file.py` | [description] | [reason] |
 
    ## Plan
 
@@ -71,7 +99,14 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
    [Which docs need updating after this work is done.]
    ```
 
-6. **Write the plan.** Write the build plan to `specs/foo_buildplan.md` (derived from the spec filename). The original spec file is left untouched.
+## Output files
+
+For a spec at `specs/foo.md`, the skill produces:
+- `specs/foo_buildplan.md` — the actionable build plan (always written)
+- `specs/foo_summaries.md` — current state and target state summaries (always written)
+- `specs/foo_misalignments.md` — misalignments report (only if misalignments exist)
+
+The original spec file is left untouched.
 
 ## Rules
 
@@ -81,3 +116,5 @@ The user will provide a path to a spec file (e.g., `specs/my-feature.md`). If no
 - **Order matters.** Steps should be in implementation order — foundations first, then layers that depend on them.
 - **Keep it buildable.** Each step should be small enough to implement and verify independently. If a step is too big, break it down.
 - **Don't write code.** You produce the plan, not the implementation. No code blocks in the plan unless they're showing a specific interface or schema that needs to be followed exactly.
+- **Verify references.** Actually read files before listing them in references. Don't guess paths or assume files exist.
+- **Scope the summaries.** Cover only what changes plus the immediate boundaries. If the summaries are getting long, the spec probably covers too much.
