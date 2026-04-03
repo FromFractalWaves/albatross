@@ -48,140 +48,90 @@ const STATES = {
   stopped: {
     label: "Stopped",
     pipelineStatus: "stopped",
-    total: 12,
-    counts: { capture: 0, preprocessing: 0, routing: 0 },
+    stages: [
+      { id: "capture",       label: "Capture",       message_type: "packet_captured",     count: 0 },
+      { id: "preprocessing", label: "Preprocessing",  message_type: "packet_preprocessed", count: 0 },
+      { id: "routing",       label: "TRM Routing",    message_type: "packet_routed",        count: 0 },
+    ],
   },
   running: {
     label: "Mid-run",
     pipelineStatus: "running",
-    total: 12,
-    counts: { capture: 12, preprocessing: 7, routing: 5 },
+    stages: [
+      { id: "capture",       label: "Capture",       message_type: "packet_captured",     count: 12 },
+      { id: "preprocessing", label: "Preprocessing",  message_type: "packet_preprocessed", count: 7 },
+      { id: "routing",       label: "TRM Routing",    message_type: "packet_routed",        count: 5 },
+    ],
   },
   complete: {
     label: "Complete",
     pipelineStatus: "stopped",
-    total: 12,
-    counts: { capture: 12, preprocessing: 12, routing: 12 },
+    stages: [
+      { id: "capture",       label: "Capture",       message_type: "packet_captured",     count: 12 },
+      { id: "preprocessing", label: "Preprocessing",  message_type: "packet_preprocessed", count: 12 },
+      { id: "routing",       label: "TRM Routing",    message_type: "packet_routed",        count: 12 },
+    ],
   },
 };
 
-// ─── Stage state derivation ──────────────────────────────────
-// Given counts and pipeline status, derive per-stage visual state.
-// Logic the PipelineStages component will use:
-//   done   — count === total
-//   active — count < total AND pipeline is running AND prior stage has packets
-//   idle   — everything else
-function deriveStageState(stageId, counts, total, pipelineStatus, stages) {
-  const count = counts[stageId] ?? 0;
-  if (total > 0 && count >= total) return "done";
-  if (pipelineStatus === "running") {
-    const idx = stages.findIndex((s) => s.id === stageId);
-    // first stage is always active when running (unless done)
-    if (idx === 0) return "active";
-    // subsequent stages are active if the previous stage has started
-    const prevId = stages[idx - 1]?.id;
-    if (prevId && (counts[prevId] ?? 0) > 0) return "active";
-  }
-  return "idle";
-}
+// ─── Stage colors ────────────────────────────────────────────
+// Each stage gets a fixed color by index. Order matches pipeline order.
+const STAGE_COLORS = [
+  tokens.accent.blue,   // capture
+  tokens.accent.amber,  // preprocessing
+  tokens.accent.purple, // routing
+  tokens.accent.cyan,   // future stages
+];
 
 // ─── PipelineStrip component ─────────────────────────────────
 // This is the component to build: web/src/components/PipelineStages.tsx
-// Receives: stages (from API), counts (from useLiveData), total, pipelineStatus
+// Receives: stages (from useLiveData) — each with id, label, message_type, count
 // Renders nothing if stages is empty — safe to drop in unconditionally.
-function PipelineStrip({ stages, counts, total, pipelineStatus }) {
+// No total, no progress bar. Counts increment from zero indefinitely.
+function PipelineStrip({ stages }) {
   if (!stages || stages.length === 0) return null;
-
-  const dotStyle = (state) => ({
-    width: 6,
-    height: 6,
-    borderRadius: "50%",
-    flexShrink: 0,
-    background:
-      state === "done"
-        ? tokens.accent.green
-        : state === "active"
-        ? tokens.accent.purple
-        : "#3a3a50",
-    animation: state === "active" ? "pulse-dot 1.4s ease-in-out infinite" : "none",
-  });
-
-  const stageStyle = (state) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "3px 8px",
-    borderRadius: 4,
-    fontSize: 11,
-    fontFamily: "'JetBrains Mono', monospace",
-    background:
-      state === "done"
-        ? "rgba(34,197,94,0.10)"
-        : state === "active"
-        ? "rgba(168,85,247,0.12)"
-        : "rgba(85,85,104,0.10)",
-    color:
-      state === "done"
-        ? tokens.accent.green
-        : state === "active"
-        ? "#c084fc"
-        : tokens.text.muted,
-  });
 
   return (
     <div
       style={{
         display: "flex",
-        alignItems: "center",
-        gap: 6,
+        flexDirection: "column",
+        gap: 3,
         padding: "7px 16px",
-        background: tokens.bg.surface,
+        background: "#060610",
         borderBottom: `1px solid ${tokens.bg.border}`,
       }}
     >
-      <span
-        style={{
-          fontSize: 10,
-          color: tokens.text.muted,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          marginRight: 4,
-          fontFamily: "'JetBrains Mono', monospace",
-        }}
-      >
-        Pipeline
-      </span>
-
       {stages.map((stage, idx) => {
-        const state = deriveStageState(
-          stage.id, counts, total, pipelineStatus, stages
-        );
-        const count = counts[stage.id] ?? 0;
+        const color = STAGE_COLORS[idx] ?? tokens.text.muted;
+        const isZero = stage.count === 0;
 
         return (
-          <React.Fragment key={stage.id}>
-            {idx > 0 && (
-              <span style={{ color: tokens.bg.border, fontSize: 12 }}>›</span>
-            )}
-            <div style={stageStyle(state)}>
-              <div style={dotStyle(state)} />
-              <span>{stage.label}</span>
-              {total > 0 && (
-                <span style={{ fontSize: 10, opacity: 0.65 }}>
-                  {count}/{total}
-                </span>
-              )}
-            </div>
-          </React.Fragment>
+          <div
+            key={stage.id}
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+            }}
+          >
+            <span style={{ width: 110, flexShrink: 0, color }}>
+              [{stage.id}]
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: isZero ? "#3a3a55" : color,
+              }}
+            >
+              {stage.count}
+            </span>
+          </div>
         );
       })}
-
-      <style>{`
-        @keyframes pulse-dot {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -419,7 +369,7 @@ function ContentStub({ counts }) {
 
 // ─── Full page mockup for one state ─────────────────────────
 function PageMockup({ state }) {
-  const { pipelineStatus, total, counts } = state;
+  const { pipelineStatus, stages } = state;
   return (
     <div
       style={{
@@ -432,16 +382,11 @@ function PageMockup({ state }) {
       <TopBar pipelineStatus={pipelineStatus} />
 
       {/* NEW: PipelineStrip sits between top bar and pipeline controls */}
-      <PipelineStrip
-        stages={MOCK_STAGES}
-        counts={counts}
-        total={total}
-        pipelineStatus={pipelineStatus}
-      />
+      <PipelineStrip stages={stages} />
 
       <PipelineControls pipelineStatus={pipelineStatus} />
       <TabBar />
-      <ContentStub counts={counts} />
+      <ContentStub counts={{ routing: stages.find(s => s.id === "routing")?.count ?? 0 }} />
     </div>
   );
 }

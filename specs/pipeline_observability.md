@@ -41,18 +41,16 @@ Add a `stages` field to the existing `PipelineStarted` message type:
 ```python
 class PipelineStarted(BaseModel):
     type: Literal["pipeline_started"]
-    total_packets: int
     stages: list[PipelineStageDefinition]
 ```
 
-The `stages` list is ordered — first to last in pipeline execution order.
+The `stages` list is ordered — first to last in pipeline execution order. `total_packets` is removed — totals are never assumed. Counts increment indefinitely from zero.
 
 Add `stages` to the `LivePipelineStarted` TypeScript type in `web/src/types/websocket.ts`:
 
 ```typescript
 type LivePipelineStarted = {
   type: "pipeline_started"
-  total_packets: number
   stages: PipelineStageDefinition[]
 }
 
@@ -124,7 +122,6 @@ Update the `pipeline_started` broadcast to include `stages`:
 ```python
 await self._broadcast({
     "type": "pipeline_started",
-    "total_packets": total,
     "stages": [s.model_dump() for s in self.pipeline_stages],
 })
 ```
@@ -164,7 +161,6 @@ Fetch `/api/mock/status` (already called by the live page for pipeline status). 
 queryClient.setQueryData(["live", "stages"], stages.map(s => ({
   ...s,
   count: 0,
-  total: 0,
 })))
 ```
 
@@ -172,7 +168,7 @@ queryClient.setQueryData(["live", "stages"], stages.map(s => ({
 
 In the existing WebSocket message handler inside `useLiveData`, extend the `pipeline_started` and stage message cases:
 
-- `pipeline_started` — reset stage counts to 0, store `total_packets`, update stages definition in cache from `msg.stages`
+- `pipeline_started` — reset stage counts to 0, update stages definition in cache from `msg.stages`
 - `packet_captured` / `packet_preprocessed` / `packet_routed` — find the stage in the cache whose `message_type` matches the incoming message type, increment its count via `queryClient.setQueryData`
 
 ```typescript
@@ -196,8 +192,7 @@ stages: Array<{
   id: string
   label: string
   message_type: string
-  count: number     // packets that have completed this stage
-  total: number     // total_packets from pipeline_started (0 until known)
+  count: number     // packets that have completed this stage, incrementing from 0
 }>
 ```
 
@@ -207,30 +202,25 @@ Derived from `useQuery(["live", "stages"])`. Returns an empty array if the cache
 
 New component: `web/src/components/PipelineStages.tsx`
 
-Renders a compact horizontal strip of stage indicators between the top bar and the pipeline controls. Each stage shows:
-- A colored dot (green = done, purple pulsing = active, muted = idle)
-- Stage label
-- `count / total` packet progress (hidden when `total === 0`)
+Renders a compact vertical strip of stage rows between the top bar and the pipeline controls. Each row shows:
+- Stage name in its stage color (e.g. `[capture]`)
+- An incrementing packet count
 
-Visual state derivation:
-- `done` — `count >= total && total > 0`
-- `active` — pipeline is running AND this stage is not done AND the previous stage has `count > 0` (or it is the first stage)
-- `idle` — everything else
+No progress bar. No total. Counts tick up from zero as packets flow through each stage. The relative lag between stage counts is the diagnostic signal — if routing is 6 behind preprocess, something is slow.
 
 Props:
 
 ```typescript
 interface PipelineStagesProps {
-  stages: StageState[]      // from useLiveData
-  pipelineStatus: string    // "running" | "stopped"
+  stages: StageState[]   // from useLiveData
 }
 ```
 
 If `stages` is empty, renders nothing. No domain knowledge — it renders whatever it receives.
 
-Placement in `live/[source]/page.tsx`: between the `TopBar` and the existing pipeline controls block. The strip uses the same surface background and border-bottom as the top bar — it reads as part of the chrome, not as page content.
+Placement in `live/[source]/page.tsx`: between the `TopBar` and the existing pipeline controls block. Dark background (`#060610`), border-bottom matching the top bar — reads as part of the chrome, not page content.
 
-See `specs/pipeline_observability_mockup.jsx` for the full reference implementation including state derivation logic.
+See `specs/pipeline_observability_mockup.jsx` for the reference visual.
 
 ---
 
