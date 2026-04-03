@@ -68,7 +68,7 @@ captured → processing → processed → routing → routed
 
 ## 3. Pipeline Manager (`api/services/live_pipeline.py`)
 
-`LivePipelineManager` orchestrates the pipeline as a single asyncio task with three concurrent stages. It is a singleton stored on `app.state.live_pipeline_manager`.
+`LivePipelineManager` (inherits `BasePipelineManager` from `api/services/base_pipeline.py`) orchestrates the pipeline as a single asyncio task with three concurrent stages. It declares its stages via the `pipeline_stages` property and is a singleton stored on `app.state.live_pipeline_manager`.
 
 **Lifecycle**:
 1. `POST /api/mock/start` → `manager.start(session_factory)` → resets DB, spawns pipeline task
@@ -174,7 +174,7 @@ Engine: `sqlite+aiosqlite:///./albatross.db` (default). Session: `AsyncSessionLo
 |----------|----------|
 | `POST /api/mock/start` | Calls `manager.start(AsyncSessionLocal)` — stops any existing pipeline, resets DB, starts new in-process pipeline task. Returns `{"status": "started"}`. |
 | `POST /api/mock/stop` | Calls `manager.stop()` — cancels the pipeline task. Returns `{"status": "stopped"}`. |
-| `GET /api/mock/status` | Returns `{"status": "running"}` if pipeline task is active, else `{"status": "stopped"}`. |
+| `GET /api/mock/status` | Returns `{"status": "running" \| "stopped", "stages": [...]}` — status plus stage definitions (always present). |
 | `ws://localhost:8000/ws/live/mock` | WebSocket endpoint. Accepts connection, sends backlog, then streams live pipeline messages. |
 
 ### Live Data Endpoints (`api/routes/live.py`)
@@ -206,6 +206,8 @@ Registered at `/api/live`. These serve as the **hydration layer** — the fronte
 
 Dynamic route where `source` is e.g. `"mock"`. Three tabs: **LIVE**, **EVENTS**, **TIMELINE**.
 
+**Pipeline stages strip** (`PipelineStages` component): renders between TopBar and controls. Shows per-stage packet counts that increment in real time. Stage definitions come from WebSocket `pipeline_started` message. Returns null when no stages are present.
+
 **Mock pipeline controls** (shown only when `source === "mock"`):
 - Polls `GET /api/mock/status` every 3000ms for status indicator.
 - Start button → `POST /api/mock/start` (resets DB + starts pipeline).
@@ -227,13 +229,15 @@ Uses **TanStack Query** for data management and **WebSocket** for real-time push
 
 **WebSocket push** (real-time updates):
 - Connects to `ws://localhost:8000/ws/live/mock`.
-- On `packet_routed`: updates TanStack Query caches with context and routing record from the message.
+- On `pipeline_started`: seeds per-stage counts from stage definitions.
+- On `packet_captured` / `packet_preprocessed` / `packet_routed`: increments matching stage count.
+- On `packet_routed`: also updates TanStack Query caches with context and routing record from the message.
 - On `pipeline_complete`: invalidates all queries to re-fetch final state from DB.
 - Auto-reconnects on disconnect with 2s backoff.
 
 **Return shape**:
 ```typescript
-{ status, context, routingRecords, latestPacketId, incomingPacket, error }
+{ status, context, routingRecords, latestPacketId, incomingPacket, stages, error }
 ```
 
 ---

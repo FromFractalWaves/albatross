@@ -86,7 +86,7 @@ The `packet_routed` message includes `incoming_packet` as a top-level sibling fi
 |--------|------|-------------|
 | `POST` | `/api/mock/start` | Reset DB and start in-process mock pipeline |
 | `POST` | `/api/mock/stop` | Cancel running mock pipeline |
-| `GET` | `/api/mock/status` | Check if mock pipeline is running — returns `{"status": "running" \| "stopped"}` |
+| `GET` | `/api/mock/status` | Check if mock pipeline is running — returns `{"status": "running" \| "stopped", "stages": [...]}` |
 
 The start endpoint resets all DB tables, then starts the pipeline as an in-process asyncio task via `LivePipelineManager`. The pipeline runs three concurrent stages (capture, preprocessing, routing) connected by async queues, writing to the DB at each stage and broadcasting progress over WebSocket.
 
@@ -100,7 +100,7 @@ After starting the pipeline via `POST /api/mock/start`, the frontend opens a Web
 
 | Type | When |
 |------|------|
-| `pipeline_started` | Pipeline begins — includes `total_packets` |
+| `pipeline_started` | Pipeline begins — includes `stages` (list of stage definitions) |
 | `packet_captured` | Packet written to DB — includes `packet_id`, `timestamp`, `metadata` |
 | `packet_preprocessed` | ASR complete — includes `packet_id`, `text` |
 | `packet_routed` | TRM routing complete — includes `routing_record`, `context`, `incoming_packet` |
