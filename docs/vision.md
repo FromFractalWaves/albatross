@@ -42,6 +42,8 @@ But like everything in Albatross, this can't be hardcoded to P25's three stages.
 
 This is related to the adaptive metadata problem below. Both are instances of the same design principle: the data describes itself, the UI renders it.
 
+Concretely: the pipeline definition comes from the API, not the frontend. Each live source registers itself with a pipeline definition — stage names in order, status labels per stage, health thresholds. When a live source starts, the `pipeline_started` WebSocket message includes this definition. The pipeline observability component hydrates from it and renders itself — it doesn't know what "capture" or "preprocessing" means, it just renders the stages it was given. On page refresh, the REST hydration endpoints include the same definition so the component can rebuild without waiting for a WebSocket message. A reusable component that any live source page can drop in.
+
 ---
 
 ## Live Mode
