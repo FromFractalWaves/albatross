@@ -24,10 +24,12 @@ audio_path: str                  # Path to WAV file
 metadata: dict[str, Any] = {}   # Domain-specific fields go here
 ```
 
+**`source_unit` is `int` throughout.** The TSBK parser outputs `srcaddr` as a raw 24-bit integer. The prototype converted it to a string in the bridge — that was a mistake. In Albatross, `srcaddr` stays `int | None` from the TSBK parser through the bridge through the backend, mapping directly to `source_unit: Optional[int]` on the contract.
+
 P25-specific metadata (lives in `metadata` dict, not on the contract):
 - `system`: `"p25_phase1"`
 - `lane_id`: int (which voice lane captured this)
-- `end_reason`: `"timeout"` | `"lane_reassigned"` | `"release"`
+- `end_reason`: `"inactivity_timeout"` | `"lane_reassigned"`
 - `sample_rate`: `8000`
 
 **The mock live pipeline (`api/services/live_pipeline.py`, `docs/pipeline/mock_pipeline.md`) is the reference implementation for the data handoff pattern.** The real capture layer follows the same flow:
@@ -167,6 +169,27 @@ A standalone Python module that decodes raw binary TSBKs into structured dicts. 
 
 **Important:** The frequency table must accumulate across calls. It's populated by `iden_up` TSBKs that the system broadcasts periodically. Until the table entries are received, channel grants can't resolve to frequencies.
 
+### Event Type Canonicalization (Prototype Bug Fix)
+
+The prototype has an event type naming mismatch across the three processes that must be fixed during transplant.
+
+**The TSBK parser outputs:** `"type": "grant"`, `"type": "grant_update"`, `"type": "iden_up"`
+
+**The bridge reads:** `msg.get("json_type")` — wrong key. Should be `msg.get("type")`. Because of this, the bridge's `LaneState` never updates from metadata events in the prototype. It still works because the flowgraph's `LaneManager` (Process 1) correctly assigns lanes using `event["type"]`, and the bridge forwards the raw JSON to the backend regardless.
+
+**The backend's `BufferManager` expects:** `GRANT_EVENT_TYPES = {"channel_grant", "channel_update", "update", "call_start"}` — wrong values. The TSBK parser emits `"grant"` and `"grant_update"`, not `"channel_grant"` or `"channel_update"`. Similarly, `RELEASE_EVENT_TYPES = {"call_end", "release", "channel_release"}` — but the TSBK parser never emits any of these types. There is no explicit release event from the parser.
+
+**Net effect in the prototype:** Metadata-driven grant handling and release handling in the backend never fire. All calls are created by `handle_pcm` (which opens an `ActiveCall` if none exists for the tgid) and all calls end via inactivity timeout (1.5s). This works but means `end_reason` is always `"inactivity_timeout"` and lane reassignment closures never happen at the backend level.
+
+**Fix for Albatross:** Use the TSBK parser's event types as the canonical names throughout. The correct sets are:
+
+```python
+GRANT_EVENT_TYPES = {"grant", "grant_update"}
+RELEASE_EVENT_TYPES = set()  # No explicit release from TSBK parser; calls end via timeout or lane reassignment
+```
+
+The bridge reads `msg.get("type")`, not `msg.get("json_type")`. The `MetadataEvent` model uses a `type` field (renamed from `json_type`). Lane reassignment detection at the backend level works via grant events that assign a new tgid to an already-occupied lane — this is already implemented in `BufferManager._grant_or_update()` and will now actually fire.
+
 ### Lane Manager
 
 Tracks which voice lanes are assigned to which talkgroups.
@@ -198,18 +221,18 @@ Correlates metadata (which tgid is on which lane) with PCM (which lane is produc
 
 ### Lane State
 
-Thread-safe mapping of `lane_id → {tgid, freq, srcaddr}`. Updated from metadata events (grants set tgid, releases clear it).
+Thread-safe mapping of `lane_id → {tgid, freq, source_unit}`. Updated from metadata events (grants set tgid, lane reassignment clears prior). The bridge reads `msg.get("type")` (not `"json_type"` as in the prototype — see Event Type Canonicalization above).
 
 ### Metadata Subscriber
 
-Pulls JSON from :5557. Parses grant/release events. Updates LaneState. Forwards to backend control socket (:5581).
+Pulls JSON from :5557. Parses grant events via the `"type"` field. Updates LaneState. Forwards to backend control socket (:5581).
 
 ### PCM Lane Subscribers
 
 One thread per voice lane. Each pulls raw int16 PCM from `pcm_endpoint(lane_id)`. Looks up current tgid in LaneState. If no active tgid, drops the PCM. Otherwise wraps in a ZMQ multipart message and pushes to :5580:
 
 ```
-Part 0: JSON header {"lane_id": int, "tgid": int, "freq": int|null, "source_radio_id": str|null, "ts": float}
+Part 0: JSON header {"lane_id": int, "tgid": int, "freq": int|null, "source_unit": int|null, "ts": float}
 Part 1: Raw int16 PCM bytes
 ```
 
@@ -224,11 +247,12 @@ Accumulates PCM per talkgroup, detects call boundaries, writes WAV files, emits 
 In-memory call state machine. Tracks active calls by tgid.
 
 **State transitions:**
-- **Grant + PCM arrives:** Open new `ActiveCall`, start accumulating chunks
+- **Grant event arrives:** Open new `ActiveCall` or update existing one. If the grant assigns a new tgid to a lane that already has a different tgid, close the prior call with reason `"lane_reassigned"`.
 - **PCM arrives for existing call:** Append chunk, update `last_pcm_at`
-- **Lane reassigned (new tgid on same lane):** Close prior call with reason "lane_reassigned"
-- **Inactivity timeout (1.5s no PCM):** Close call with reason "timeout"
-- **Release event:** Close call with reason "release"
+- **PCM arrives with no existing call:** Open new `ActiveCall` from PCM header fields
+- **Inactivity timeout (1.5s no PCM):** Close call with reason `"inactivity_timeout"`
+
+There are no explicit release events from the TSBK parser. Call endings are detected by inactivity timeout or lane reassignment. The prototype's `RELEASE_EVENT_TYPES` were never matched and should be removed.
 
 **ActiveCall** accumulates PCM as a list of byte chunks. On close, chunks are joined into a single `audio_bytes` buffer → `CompletedCall`.
 
@@ -236,7 +260,7 @@ In-memory call state machine. Tracks active calls by tgid.
 
 Writes each `CompletedCall` as a mono int16 WAV file.
 
-**Filename:** `{ISO8601_start}_{tgid}_{srcaddr}_{uuid}.wav`
+**Filename:** `{ISO8601_start}_{tgid}_{source_unit}_{uuid}.wav`
 
 **Parameters:** 1 channel, 2 bytes/sample, 8000 Hz sample rate.
 
@@ -257,7 +281,7 @@ TransmissionPacket(
     metadata={
         "system": "p25_phase1",
         "lane_id": call.lane_id,
-        "end_reason": call.end_reason,            # "timeout" | "lane_reassigned" | "release"
+        "end_reason": call.end_reason,            # "inactivity_timeout" | "lane_reassigned"
         "sample_rate": 8000,
     },
 )
