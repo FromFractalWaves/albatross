@@ -24,7 +24,7 @@ audio_path: str                  # Path to WAV file
 metadata: dict[str, Any] = {}   # Domain-specific fields go here
 ```
 
-**`source_unit` is `int` throughout.** The TSBK parser outputs `srcaddr` as a raw 24-bit integer. The prototype converted it to a string in the bridge — that was a mistake. In Albatross, `srcaddr` stays `int | None` from the TSBK parser through the bridge through the backend, mapping directly to `source_unit: Optional[int]` on the contract.
+**`source_unit` is `int` throughout.** The TSBK parser outputs `srcaddr` as a raw 24-bit integer. The prototype converted it to a string in the bridge — that was a mistake. In Albatross, the value stays `int | None` from the TSBK parser onward. The TSBK parser output keeps the name `srcaddr` (that's its P25 domain term), but once the value enters the capture internal models (`ActiveCall`, `CompletedCall`, PCM headers, lane state), it becomes `source_unit` to match the Albatross contract. No name translation at the `TransmissionPacket` boundary — the field is already `source_unit` by that point.
 
 P25-specific metadata (lives in `metadata` dict, not on the contract):
 - `system`: `"p25_phase1"`
@@ -238,6 +238,8 @@ Part 0: JSON header {"lane_id": int, "tgid": int, "freq": int|null, "source_unit
 Part 1: Raw int16 PCM bytes
 ```
 
+Note: The bridge translates `srcaddr` from the TSBK parser output into `source_unit` when building the PCM header and updating lane state. This is where the P25 domain name crosses into the Albatross domain name.
+
 ---
 
 ## Process 3: Backend
@@ -275,7 +277,7 @@ TransmissionPacket(
     id=str(uuid4()),
     timestamp=call.start_time.isoformat(),       # ISO8601 call start
     talkgroup_id=call.tgid,                       # int
-    source_unit=call.srcaddr,                     # int | None
+    source_unit=call.source_unit,                 # int | None
     frequency=float(call.freq),                   # Hz as float
     duration=call.duration_seconds,               # float
     encryption_status=False,                      # not handling encrypted
@@ -303,7 +305,7 @@ Backend writes to DB  ──→  Backend pushes to :5590  ──→  API receive
 
 ### Event Loop
 
-The backend polls two ZMQ sockets (PCM and control) with a 10ms timeout. Every 0.5s it sweeps for timed-out calls. On shutdown it drains all remaining calls.
+The backend is async — it uses `zmq.asyncio.Context` and `zmq.asyncio.Poller` throughout, not the synchronous ZMQ API. This is a change from the prototype's synchronous `zmq.Poller` loop, driven by the need for async DB writes via `AsyncSessionLocal`. The main loop polls two ZMQ sockets (PCM and control) with a 10ms timeout. Every 0.5s it sweeps for timed-out calls. On shutdown it drains all remaining calls. Entry point: `asyncio.run(backend.run())`.
 
 ---
 
@@ -363,5 +365,3 @@ The backend polls two ZMQ sockets (PCM and control) with a 10ms timeout. Every 0
 1. **Where do WAV files live?** The prototype used `out/wav/`. The main repo needs a convention — probably configurable via `.env` or settings, with a default like `data/wav/` or `capture/wav/`.
 
 2. **How are the three capture processes launched?** They're separate OS processes. The prototype launched them manually. For integration, options include a shell script, a supervisor process, or systemd units. This is an operational decision, not a code decision.
-
-3. **Does the backend process run its own async event loop for DB writes?** The mock pipeline uses the API's async session factory. The capture backend is a standalone process — it needs its own session factory from `db/session.py`, which is already set up to work standalone.
