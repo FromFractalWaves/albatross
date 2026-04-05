@@ -62,19 +62,21 @@ Output: WAV files + `TransmissionPacket` records conforming to the existing Alba
 
 ## Three-Process Architecture
 
+The capture layer lives in `capture/trunked_radio/` — one implementation of the capture stage, alongside the existing `capture/mock/`. All shared modules (models, config, TSBK parser, buffer manager, etc.) are flat within the package. The three processes are entry points in that same package.
+
 The capture layer runs as three cooperating processes connected by ZMQ:
 
 ```
-[1] Flowgraph (GNU Radio)
+[1] Flowgraph (capture/trunked_radio/flowgraph.py)
       ├── control lane → msg_queue → MetadataPoller → ZMQ PUSH :5557 (JSON)
       └── voice lanes (×8) → ZMQ PUSH :5560-:5567 (int16 PCM)
 
-[2] Bridge
+[2] Bridge (capture/trunked_radio/bridge.py)
       ├── pulls metadata from :5557, tracks lane→tgid mapping
       ├── pulls PCM from :5560-:5567, tags with tgid
       └── pushes to backend: :5580 (tagged PCM multipart), :5581 (metadata JSON)
 
-[3] Backend
+[3] Backend (capture/trunked_radio/backend.py)
       ├── pulls from :5580 and :5581
       ├── accumulates PCM per talkgroup in memory
       ├── detects call boundaries (inactivity timeout)
@@ -84,6 +86,8 @@ The capture layer runs as three cooperating processes connected by ZMQ:
 This is three OS processes, not three async tasks. ZMQ decouples them so the flowgraph (real-time RF) never blocks on downstream processing.
 
 The backend process is the integration point with the main Albatross repo. It imports from `contracts/models.py` and `db/` to write packets to the database. Processes 1 and 2 have no Albatross dependencies.
+
+Entry points: `python -m capture.trunked_radio.flowgraph`, `python -m capture.trunked_radio.bridge`, `python -m capture.trunked_radio.backend`.
 
 ---
 
