@@ -62,7 +62,29 @@ Output: WAV files + `TransmissionPacket` records conforming to the existing Alba
 
 ## Three-Process Architecture
 
-The capture layer lives in `capture/trunked_radio/` — one implementation of the capture stage, alongside the existing `capture/mock/`. All shared modules (models, config, TSBK parser, buffer manager, etc.) are flat within the package. The three processes are entry points in that same package.
+The capture layer lives in `capture/trunked_radio/` — one implementation of the capture stage, alongside the existing `capture/mock/`. All shared modules (models, config, TSBK parser, buffer manager, etc.) are flat within the package. The three processes are entry points in that same package. The `capture/mock/` directory and its standalone script are untouched — the mock pipeline continues to work as-is.
+
+```
+capture/
+├── __init__.py
+├── mock/                        # existing, untouched
+│   ├── __init__.py
+│   └── run.py
+└── trunked_radio/               # new — this spec
+    ├── __init__.py
+    ├── config.py
+    ├── models.py
+    ├── tsbk.py
+    ├── lane_manager.py
+    ├── metadata_poller.py
+    ├── flowgraph.py             # Process 1 entry point
+    ├── bridge.py                # Process 2 entry point
+    ├── backend.py               # Process 3 entry point
+    ├── buffer_manager.py
+    ├── wav_writer.py
+    ├── packet_builder.py
+    └── packet_sink.py
+```
 
 The capture layer runs as three cooperating processes connected by ZMQ:
 
@@ -198,7 +220,7 @@ The bridge reads `msg.get("type")`, not `msg.get("json_type")`. The `MetadataEve
 
 ### Lane Manager
 
-Tracks which voice lanes are assigned to which talkgroups.
+Tracks which voice lanes are assigned to which talkgroups. This is pure logic with thread safety — it has no GNU Radio dependency and is fully unit-testable (grant allocation, frequency preemption, pool exhaustion, stale sweep).
 
 **Grant handling:**
 1. If tgid already has a lane, update it (retune if freq changed)
@@ -299,7 +321,7 @@ After building the packet, the backend calls `packet.to_orm()` and writes the re
 
 ### Packet Emission
 
-The backend emits each completed `TransmissionPacket` via a `PacketSink`. The prototype defines a `PacketSink` protocol with `JsonlPacketSink` and `StdoutPacketSink` implementations. For Albatross integration, a `ZmqPacketSink` pushes the packet as JSON to a dedicated endpoint (`:5590`), notifying the API that a new packet is available for preprocessing.
+The backend emits each completed `TransmissionPacket` via a `PacketSink`. The protocol is `async` — the backend's event loop is async (`zmq.asyncio`), so the sink interface matches. `ZmqPacketSink` is the production implementation, pushing the packet as JSON to `:5590`. `StdoutPacketSink` and `JsonlPacketSink` are async wrappers around sync I/O, used for debugging and testing. The prototype had a sync protocol; the async change is driven by the backend's async event loop.
 
 The DB write and ZMQ push happen together in `_finalize_calls` — write to DB first, then push notification. The API subscribes to `:5590` and feeds incoming packets into the preprocessing stage. This is the push-based equivalent of the mock pipeline's `PacketQueue` between capture and preprocessing, bridging the OS process boundary via ZMQ.
 
