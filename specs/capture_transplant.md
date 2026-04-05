@@ -41,6 +41,8 @@ P25-specific metadata (lives in `metadata` dict, not on the contract):
 
 The capture layer writes directly to the database using the same `db/session.py` async session factory. No new handoff mechanism is needed.
 
+**Push-only data flow.** The Albatross pipeline uses push-based notification throughout — no polling. The capture backend, after writing a `TransmissionPacket` to the DB, pushes a notification over ZMQ so downstream stages (preprocessing, TRM) can consume immediately. This matches the in-process mock pipeline where async `PacketQueue`s connect stages; ZMQ bridges the process boundary instead of an asyncio queue. The standalone mock scripts (`capture/mock/run.py`, `preprocessing/mock/run.py`) use DB polling — that pattern is legacy and is not carried forward into the real pipeline.
+
 ---
 
 ## What It Does
@@ -288,6 +290,16 @@ TransmissionPacket(
 ```
 
 After building the packet, the backend calls `packet.to_orm()` and writes the resulting `Transmission` row to the database with `status="captured"`. This is the same pattern used by the mock capture stage in `LivePipelineManager`.
+
+### Packet Emission
+
+The backend emits each completed `TransmissionPacket` via a `PacketSink`. The prototype defines a `PacketSink` protocol with `JsonlPacketSink` and `StdoutPacketSink` implementations. For Albatross integration, a `ZmqPacketSink` pushes the packet as JSON to a dedicated endpoint (`:5590`), notifying the API that a new packet is available for preprocessing.
+
+The DB write and ZMQ push happen together in `_finalize_calls` — write to DB first, then push notification. The API subscribes to `:5590` and feeds incoming packets into the preprocessing stage. This is the push-based equivalent of the mock pipeline's `PacketQueue` between capture and preprocessing, bridging the OS process boundary via ZMQ.
+
+```
+Backend writes to DB  ──→  Backend pushes to :5590  ──→  API receives, starts preprocessing
+```
 
 ### Event Loop
 
