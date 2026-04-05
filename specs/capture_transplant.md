@@ -6,6 +6,41 @@ This spec describes the capture layer: the system that turns a live P25 trunked 
 
 ---
 
+## Integration Contract
+
+**Capture output must conform to the existing `TransmissionPacket` in `contracts/models.py` as-is.** The contract is domain-agnostic by design. P25-specific fields go in the `metadata` dict — the contract is not modified.
+
+The existing `TransmissionPacket` fields:
+
+```python
+id: str                          # UUID, assigned by capture
+timestamp: str                   # ISO8601, call start time
+talkgroup_id: int                # P25 TGID
+source_unit: Optional[int]       # Source radio ID (srcaddr), nullable
+frequency: float                 # Hz
+duration: float                  # Seconds
+encryption_status: bool          # False for this system
+audio_path: str                  # Path to WAV file
+metadata: dict[str, Any] = {}   # Domain-specific fields go here
+```
+
+P25-specific metadata (lives in `metadata` dict, not on the contract):
+- `system`: `"p25_phase1"`
+- `lane_id`: int (which voice lane captured this)
+- `end_reason`: `"timeout"` | `"lane_reassigned"` | `"release"`
+- `sample_rate`: `8000`
+
+**The mock live pipeline (`api/services/live_pipeline.py`, `docs/pipeline/mock_pipeline.md`) is the reference implementation for the data handoff pattern.** The real capture layer follows the same flow:
+
+1. Build a `TransmissionPacket` from capture output
+2. Call `to_orm()` → `Transmission` ORM object with `status="captured"`, `text=None`
+3. Write to DB via async session
+4. Everything downstream (preprocessing, TRM, persistence) is unchanged
+
+The capture layer writes directly to the database using the same `db/session.py` async session factory. No new handoff mechanism is needed.
+
+---
+
 ## What It Does
 
 A single RTL-SDR dongle receives P25 Phase 1 trunked radio. The system:
@@ -17,7 +52,7 @@ A single RTL-SDR dongle receives P25 Phase 1 trunked radio. The system:
 5. Writes each completed transmission as a WAV file
 6. Emits a `TransmissionPacket` for each transmission
 
-Output: WAV files + structured packet records conforming to the Albatross `TransmissionPacket` contract.
+Output: WAV files + `TransmissionPacket` records conforming to the existing Albatross contract.
 
 ---
 
@@ -39,10 +74,12 @@ The capture layer runs as three cooperating processes connected by ZMQ:
       ├── pulls from :5580 and :5581
       ├── accumulates PCM per talkgroup in memory
       ├── detects call boundaries (inactivity timeout)
-      └── on call end: WAV file + TransmissionPacket
+      └── on call end: WAV file + TransmissionPacket → DB write
 ```
 
 This is three OS processes, not three async tasks. ZMQ decouples them so the flowgraph (real-time RF) never blocks on downstream processing.
+
+The backend process is the integration point with the main Albatross repo. It imports from `contracts/models.py` and `db/` to write packets to the database. Processes 1 and 2 have no Albatross dependencies.
 
 ---
 
@@ -205,37 +242,28 @@ Writes each `CompletedCall` as a mono int16 WAV file.
 
 ### Packet Builder
 
-Constructs a `TransmissionPacket` from each `CompletedCall`:
+Constructs a `TransmissionPacket` from each `CompletedCall`, mapping to the existing contract fields:
 
-```json
-{
-    "packet_id": "uuid",
-    "packet_type": "transmission",
-    "timestamp_start": "ISO8601",
-    "timestamp_end": "ISO8601",
-    "source": {
-        "talkgroup_id": 6096,
-        "source_radio_id": "1070172",
-        "frequency": 856312500
-    },
-    "metadata": {
-        "talkgroup_id": 6096,
-        "source_radio_id": "1070172",
-        "frequency": 856312500,
+```python
+TransmissionPacket(
+    id=str(uuid4()),
+    timestamp=call.start_time.isoformat(),       # ISO8601 call start
+    talkgroup_id=call.tgid,                       # int
+    source_unit=call.srcaddr,                     # int | None
+    frequency=float(call.freq),                   # Hz as float
+    duration=call.duration_seconds,               # float
+    encryption_status=False,                      # not handling encrypted
+    audio_path=str(wav_path),                     # absolute path to WAV
+    metadata={
         "system": "p25_phase1",
-        "lane_id": 2,
-        "end_reason": "timeout"
+        "lane_id": call.lane_id,
+        "end_reason": call.end_reason,            # "timeout" | "lane_reassigned" | "release"
+        "sample_rate": 8000,
     },
-    "payload": {
-        "audio_path": "/path/to/file.wav",
-        "duration_seconds": 4.2,
-        "sample_rate": 8000
-    },
-    "status": "captured"
-}
+)
 ```
 
-This conforms to the Albatross base `Packet` schema. `source_radio_id` is nullable — it's only present if the initial channel grant included a `srcaddr`.
+After building the packet, the backend calls `packet.to_orm()` and writes the resulting `Transmission` row to the database with `status="captured"`. This is the same pattern used by the mock capture stage in `LivePipelineManager`.
 
 ### Event Loop
 
@@ -285,18 +313,19 @@ The backend polls two ZMQ sockets (PCM and control) with a 10ms timeout. Every 0
 
 - ASR / transcription (downstream of capture)
 - TRM routing (downstream of ASR)
-- Database persistence (the main albatross repo handles this)
+- Database persistence beyond the initial `status="captured"` write (the main Albatross pipeline handles the rest)
 - Web UI
 - Multi-SDR expansion
 - Encrypted talkgroup handling
 - P25 Phase 2 / TDMA (the TSBK parser has some TDMA support but voice decoding is Phase 1 only)
+- How the capture processes are started/supervised (systemd, shell script, etc.)
 
 ---
 
-## Integration Notes
+## Open Design Questions
 
-The main albatross repo already has `TransmissionPacket` in `contracts/models.py` with a `to_orm()` method. The capture layer's packet output should map to that contract. The `source`, `metadata`, and `payload` field structure above is designed to align with it.
+1. **Where do WAV files live?** The prototype used `out/wav/`. The main repo needs a convention — probably configurable via `.env` or settings, with a default like `data/wav/` or `capture/wav/`.
 
-The mock pipeline in the main repo (`capture/mock/run.py`) currently reads from `packets_radio.json`. The real capture layer replaces that with live packet emission. The handoff point is the `TransmissionPacket` — everything downstream (preprocessing, TRM, storage) is unchanged.
+2. **How are the three capture processes launched?** They're separate OS processes. The prototype launched them manually. For integration, options include a shell script, a supervisor process, or systemd units. This is an operational decision, not a code decision.
 
-The capture layer runs as a separate set of processes from the API server. It writes packets to the database (or a queue) for the existing pipeline to consume. The exact handoff mechanism (direct DB write, message queue, filesystem watch) is a design decision for the build plan.
+3. **Does the backend process run its own async event loop for DB writes?** The mock pipeline uses the API's async session factory. The capture backend is a standalone process — it needs its own session factory from `db/session.py`, which is already set up to work standalone.
