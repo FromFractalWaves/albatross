@@ -39,35 +39,35 @@ GNU Radio `gr.top_block` subclass (`P25Flowgraph`). Requires GNU Radio 3.10+, gr
 
 **SDR source:** `osmosdr.source()` centered at 855.75 MHz, 3.2 Msps. RF gain 30 dB, IF gain 20 dB, BB gain 20 dB. The center frequency is between the control channel (854.6125 MHz) and voice channels (856-857 MHz) so both fall within the visible band.
 
-**Control lane** (one, fixed offset):
+**Control lane** — uses `p25_demod_cb` (OP25's complex-input demodulator with AGC, FLL, and full symbol recovery). This is the heavy demod chain but provides robust lock on the continuously-broadcasting control channel:
 
 ```
-source → freq_xlating_fir_filter_ccf(decim=50, offset=-1,137,500 Hz)
-       → quadrature_demod_cf(gain = 64000 / (2pi x 600))
-       → p25_demod_fb(input_rate=64000)
-       → frame_assembler(do_imbe=True, do_output=False, do_msgq=True)
+source → p25_demod_cb(input_rate=3200000, demod_type='fsk4',
+                       relative_freq=1137500, if_rate=24000)
+       → p25_frame_assembler(do_msgq=True, do_output=False)
        → gr.msg_queue(50)
 ```
 
-The frame assembler writes raw 12-byte binary P25 TSBKs into the message queue (type 7 messages).
+The `relative_freq` follows OP25's convention: `CENTER_FREQ - CONTROL_FREQ` (positive when channel is below center). The `p25_demod_cb` block does its own two-stage decimation (3.2M → 100k → 25k), bandpass filtering, mixing, resampling to 24 kHz, AGC, FLL, FM demod, and FSK4 symbol recovery internally.
 
-**Voice lanes** (8 pooled, dynamically retuned):
+The frame assembler writes P25 frames into the message queue. DUID 7 messages are TSBKs (12 bytes: 2-byte NAC + 10-byte body, CRC stripped by OP25).
+
+**Voice lanes** (8 pooled, dynamically retuned) — use a lightweight chain to avoid CPU overload. Each voice lane has:
 
 ```
-source → freq_xlating_fir_filter_ccf(decim=50, offset=0 initially)
-       → quadrature_demod_cf(same gain)
-       → p25_demod_fb(input_rate=64000)
-       → frame_assembler(do_imbe=True, do_output=True, do_audio_output=True)
+source → freq_xlating_fir_filter_ccf(decim=133, offset=0 initially)
+       → quadrature_demod_cf(gain = 24000 / (2pi × 600))
+       → multiply_const_ff(1.0)
+       → fir_filter_fff(c4fm_taps)
+       → fsk4_demod_ff(if_rate=24000, symbol_rate=4800)
+       → fsk4_slicer_fb(levels=[-2, 0, 2, 4])
+       → p25_frame_assembler(do_output=True, do_audio_output=True)
        → zeromq.push_sink(sizeof_short, tcp://*:5560+lane_id, timeout=100ms)
 ```
 
-Voice lanes start at offset 0 (idle). The LaneManager retunes them via `set_center_freq()` when channel grants arrive.
+Voice lanes start at offset 0 (idle). The LaneManager retunes them via `channelizer.set_center_freq(freq - center)` when channel grants arrive.
 
-**Channel filter taps:** Hamming-windowed low-pass, 6250 Hz cutoff, 1500 Hz transition, at the source sample rate.
-
-**FM demod gain:** `channel_rate / (2pi x FM_deviation)` where channel_rate = 64000 Hz and FM_deviation = 600 Hz (P25 C4FM symbol deviation).
-
-**`p25_demod_fb`:** Hierarchical block from OP25's app layer (`p25_demodulator.py`). Contains AGC, C4FM matched filter (using `op25_c4fm_mod` taps), and `fsk4_demod_ff` with symbol timing recovery. Imported via `sys.path` from `OP25_APPS_DIR`.
+**CPU budget:** The control lane's `p25_demod_cb` is expensive (processes full 3.2 Msps internally) but there is only one. Voice lanes use a `freq_xlating_fir_filter` to decimate to 24 kHz first, then do all symbol processing at the low rate. This is critical — running 8+ copies of `p25_demod_cb` at 3.2 Msps causes GNU Radio buffer overflows on laptop hardware. See `specs/radio_integration.md` for the current CPU budget issue and planned resolution.
 
 ### LaneManager
 
@@ -84,8 +84,9 @@ Daemon thread bridging `gr.msg_queue` to ZMQ.
 1. Drains `gr.msg_queue` (non-blocking, 5ms sleep on empty)
 2. Calls `TSBKParser.process_qmsg()` on each message
 3. For grants/grant_updates: calls `LaneManager.on_grant()`, injects returned `lane_id` into the event dict
-4. Pushes all parsed events as JSON via ZMQ PUSH on :5557
+4. Pushes all parsed events as JSON via ZMQ PUSH on :5557 (NOBLOCK, drops if no consumer)
 5. Every ~2s: calls `LaneManager.sweep_stale()`
+6. Every ~10s: logs a status line with message/TSBK/decoded counts
 
 ---
 
@@ -95,9 +96,9 @@ Correlates metadata (which tgid is on which lane) with PCM (which lane is produc
 
 **LaneState** — Thread-safe mapping of `lane_id -> {tgid, freq, source_unit}`. Updated by metadata events, read by PCM subscribers.
 
-**MetadataSubscriber** — Pulls JSON from :5557. For grant/grant_update events, updates LaneState. Translates `srcaddr` (P25 domain) to `source_unit` (Albatross domain) at this boundary. Forwards all messages to :5581 for the backend.
+**MetadataSubscriber** — Pulls JSON from :5557. For grant/grant_update events, updates LaneState. Translates `srcaddr` (P25 domain) to `source_unit` (Albatross domain) at this boundary. Forwards all messages to :5581 for the backend. Send HWM set to 1000.
 
-**PCMLaneSubscriber** (x8) — One per voice lane. Pulls raw int16 PCM from :5560+lane_id. Looks up tgid in LaneState. If no tgid assigned, drops the PCM. Otherwise wraps in ZMQ multipart and pushes to :5580:
+**PCMLaneSubscriber** (x8) — One per voice lane. Pulls raw int16 PCM from :5560+lane_id. Looks up tgid in LaneState. If no tgid assigned, drops the PCM. Otherwise wraps in ZMQ multipart and pushes to :5580 (send HWM 1000):
 
 ```
 Part 0: JSON header {"lane_id": int, "tgid": int, "freq": int|null, "source_unit": int|null, "ts": float}
@@ -116,7 +117,7 @@ Accumulates PCM per talkgroup, detects call boundaries, writes WAV files, emits 
 
 **Packet Builder** — Maps `CompletedCall` + WAV path to `TransmissionPacket` (from `contracts.models`). Sets `metadata` with `system`, `lane_id`, `end_reason`, `sample_rate`.
 
-**Event Loop** — Async (`zmq.asyncio`). Polls PCM (:5580) and control (:5581) with 10ms timeout. Every 0.5s sweeps for timed-out calls. On call end: writes WAV, builds packet, writes `Transmission` row to DB (`status="captured"`), pushes packet via `PacketSink` to :5590.
+**Event Loop** — Async (`zmq.asyncio`). Polls PCM (:5580) and control (:5581) with 10ms timeout. Every 0.5s sweeps for timed-out calls. On call end: writes WAV, builds packet, writes `Transmission` row to DB (`status="captured"`), pushes packet via `PacketSink` to :5590. Per-call finalization is wrapped in try/except — a single bad call does not crash the loop.
 
 ---
 
@@ -136,9 +137,21 @@ Accumulates PCM per talkgroup, detects call boundaries, writes WAV files, emits 
 
 Standalone module (`tsbk.py`). No Albatross imports. GPL v3.
 
-Decodes raw 12-byte P25 TSBKs (2-byte NAC + 10-byte body) into structured dicts. Maintains a frequency table populated from `iden_up` broadcasts. Handles opcodes: 0x00 (grant), 0x02 (grant update), 0x03 (grant update explicit), 0x33/0x34/0x3d (frequency table entries).
+Decodes P25 TSBKs from OP25's `gr.msg_queue` frames. The `process_qmsg()` method handles the OP25 wire format:
 
-Frequency resolution: channel_id bits 15-12 select a table entry, bits 11-0 are the channel number. `frequency = base + (step x channel_number)`.
+- `msg.type()` is packed as `(protocol << 16 | DUID)`. DUID 7 = TSBK.
+- `msg.to_string()` returns bytes: 2-byte NAC + 10-byte body (CRC already stripped by OP25).
+- The 10-byte body is converted to a 96-bit integer (left-shifted 16 for missing CRC) matching OP25's `tk_p25.py` convention before field extraction via bit shifts.
+
+TSBK body layout (96-bit integer after shift): bits 93-88 = opcode (6 bits, after LB/protected flags). Field positions match OP25's `decode_tsbk()` in `tk_p25.py`.
+
+Handled opcodes:
+- **0x00** — Group Voice Channel Grant (tgid, channel_id, srcaddr). Skips Motorola mfrid=0x90 variants.
+- **0x02** — Group Voice Channel Grant Update (two tgid/channel pairs). Handles Motorola mfrid=0x90 variant (single pair + srcaddr).
+- **0x03** — Group Voice Channel Grant Update Explicit. Handles standard and Motorola variants.
+- **0x33, 0x34, 0x3D** — Identifier Update (frequency table entries). Populates `freq_table` used by `_resolve_frequency()`.
+
+Frequency resolution: channel_id bits 15-12 select a table entry, bits 11-0 are the channel number. `frequency = base + (step × channel_number)`. Units match OP25: base in 5 Hz units × 5, step in 125 Hz units × 125, offset in 250 kHz units × 250000.
 
 ---
 

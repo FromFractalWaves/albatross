@@ -108,22 +108,29 @@ class CaptureBackend:
 
     async def _finalize_calls(self, calls: list[CompletedCall]) -> None:
         for call in calls:
-            wav_path = self.wav_writer.write(call)
-            packet = build_packet(call, wav_path)
-            orm_obj = packet.to_orm()
+            try:
+                wav_path = self.wav_writer.write(call)
+                packet = build_packet(call, wav_path)
+                orm_obj = packet.to_orm()
 
-            async with AsyncSessionLocal() as session:
-                async with session.begin():
-                    session.add(orm_obj)
+                async with AsyncSessionLocal() as session:
+                    async with session.begin():
+                        session.add(orm_obj)
 
-            await self.sink.emit(packet)
-            logger.info(
-                "Finalized tgid=%d lane=%d duration=%.1fs reason=%s",
-                call.tgid,
-                call.lane_id,
-                call.duration_seconds,
-                call.end_reason,
-            )
+                await self.sink.emit(packet)
+                logger.info(
+                    "Finalized tgid=%d lane=%d duration=%.1fs reason=%s",
+                    call.tgid,
+                    call.lane_id,
+                    call.duration_seconds,
+                    call.end_reason,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to finalize tgid=%d lane=%d — skipping",
+                    call.tgid,
+                    call.lane_id,
+                )
 
 
 if __name__ == "__main__":

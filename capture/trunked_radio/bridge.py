@@ -62,6 +62,7 @@ class MetadataSubscriber(threading.Thread):
         meta_sock.connect(config.metadata_endpoint())
 
         control_sock = self.ctx.socket(zmq.PUSH)
+        control_sock.sndhwm = 1000
         control_sock.connect(config.control_backend_endpoint())
 
         logger.info("MetadataSubscriber connected — pull %s, push %s",
@@ -110,6 +111,7 @@ class PCMLaneSubscriber(threading.Thread):
         pcm_sock.connect(config.pcm_endpoint(self.lane_id))
 
         push_sock = self.ctx.socket(zmq.PUSH)
+        push_sock.sndhwm = 1000
         push_sock.connect(config.pcm_backend_endpoint())
 
         logger.info("PCMLaneSubscriber[%d] connected — pull %s, push %s",
