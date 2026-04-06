@@ -19,7 +19,7 @@ SAMPLE_RATE = 8000
 # Bridge-side ZMQ ports (flowgraph → bridge)
 METADATA_PORT = 5557
 PCM_BASE_PORT = 5560
-NUM_LANES = 8
+NUM_LANES = 3  # reduced from 8 — CPU budget issue, see specs/radio_integration.md
 
 
 def pcm_endpoint(lane_id: int) -> str:

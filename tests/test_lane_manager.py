@@ -38,7 +38,7 @@ class TestLaneManagerGrants:
         assert lm._tgid_to_lane[6038] == lane_b
 
     def test_pool_exhaustion(self):
-        lm = LaneManager()
+        lm = LaneManager(num_lanes=8)
         for i in range(8):
             assert lm.on_grant(6000 + i, 856000000 + i * 25000, i) is not None
 
