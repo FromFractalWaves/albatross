@@ -79,3 +79,22 @@ The vision doc says *what Albatross should become*. Specs say *what to build nex
 ## What Else Belongs Here
 
 This document is intentionally incomplete. It captures design intent as it crystallizes — not a roadmap, not a phase plan. Items land here when they represent what Albatross *should be*, independent of when or whether they get built.
+
+## Historical Data & Archive Storage
+
+
+When the system is running continuously, the volume of data it produces becomes significant. Every transmission, ASR transcript, audio file path, and routing decision adds up. This needs to be thought about before it becomes a problem.
+The working DB is ephemeral and gets cleared on pipeline start — that part is already decided. The archive DB accumulates the intelligence output across runs and is never cleared automatically. Controls to clear it live in the historical data UI, behind a deliberate action.
+What goes into the archive and when is configurable. During active development and prompt tuning, you want everything — full transmission records, ASR text, audio paths, routing decisions, thread and event output, all tagged with a run ID and timestamp. When the system is tuned and running well, storing every raw transmission indefinitely stops making sense. An archive_transmissions flag on the pipeline config lets you dial this down to just the intelligence layer — threads, events, routing records — once you're confident the capture and preprocessing stages are working correctly.
+The historical data browser is a separate UI surface from the live dashboard. Different interaction model — browsing, filtering, comparing runs rather than watching data flow. A natural addition to the homepage hub alongside TRM Tools and Live Data. The archive DB is its sole data source.
+
+source_management
+## Source Management
+
+Capture sources are pluggable. Each source is a Python package under `capture/` that knows how to start, stop, and report health for its own processes. The API discovers available sources at startup and exposes a uniform interface — the UI renders controls (start, stop, settings, status) for whatever sources exist without per-source wiring.
+
+A source package registers itself by providing a standard interface: what processes to launch, what settings are configurable (with defaults and types), how to check health, and how to stop cleanly. The API doesn't know about P25 or trunked radio — it knows about sources that can be started and stopped.
+
+The sources page in the UI becomes a discovery surface: it shows what's available, what's running, and lets you configure and launch sources. Adding a new capture source means adding a package under `capture/` with the right interface — no API routes, no frontend components, no plumbing.
+
+This is distinct from `BasePipelineManager`, which orchestrates in-process async stages. Source management orchestrates external OS processes. The two layers connect when the API subscribes to a source's output (e.g., the `:5590` ZMQ push from the trunked radio backend) and feeds it into the existing preprocessing → TRM pipeline.

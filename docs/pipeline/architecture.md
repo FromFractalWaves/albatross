@@ -37,11 +37,11 @@ The UUID is the primary key. You can always trace from a routing decision, a thr
 
 **This is not simple.** The capture layer is a multi-component system:
 
-1. **GNU Radio flowgraph** (`flowgraph.py`) — runs gr-op25 blocks directly (not the stock OP25 app layer). One fixed control lane at the P25 control channel frequency drives the metadata queue. N pooled voice lanes (configurable via `VOICE_LANE_CAP`, default 8) are dynamically allocated on channel grants and returned on call end or inactivity.
+1. **GNU Radio flowgraph** (`capture/trunked_radio/flowgraph.py`) — `P25Flowgraph(gr.top_block)` with `p25_demod_fb` from OP25. One fixed control lane decodes TSBKs via `MetadataPoller` + `LaneManager`. 8 pooled voice lanes dynamically allocated on channel grants and released on stale sweep (5s no grant).
 
-2. **ZMQ bridge** (`zmq_bridge.py`) — sits between the flowgraph and the backend. Subscribes to per-lane PCM streams and the metadata queue. Correlates lane PCM with TGID metadata from the control channel using `LaneState` cross-indexing. Forwards tagged PCM (multipart: JSON header + raw int16) and control messages over ZMQ.
+2. **ZMQ bridge** (`capture/trunked_radio/bridge.py`) — sits between the flowgraph and the backend. `MetadataSubscriber` pulls from :5557, updates `LaneState`, translates `srcaddr` → `source_unit`. 8 `PCMLaneSubscriber` threads pull PCM from :5560-5567, tag with tgid, push multipart to :5580.
 
-3. **Capture backend** (`capture_backend.py`) — receives tagged PCM and control messages from the bridge. Maintains per-TGID call buffers via `BufferManager`. On call end or inactivity timeout: writes a WAV file, builds a `TransmissionPacket`, and emits it.
+3. **Capture backend** (`capture/trunked_radio/backend.py`) — receives tagged PCM (:5580) and control messages (:5581). `BufferManager` tracks per-TGID call buffers. On call end or inactivity timeout (1.5s): writes a WAV file, builds a `TransmissionPacket`, writes to DB, emits via `PacketSink`.
 
 **Output:** A `TransmissionPacket` with:
 
@@ -59,7 +59,7 @@ TransmissionPacket {
 ```
 
 **What gets stored:**
-- WAV file on disk: `out/wav/{timestamp}_{tgid}_{src}_{uuid}.wav`
+- WAV file on disk: `data/wav/{timestamp}_{tgid}_{src}_{uuid}.wav` (configurable via `CAPTURE_WAV_DIR`)
 - Database record: all `TransmissionPacket` fields, `status = 'captured'`
 
 See `docs/pipeline/architecture.md` (this document) for the full capture architecture and open questions.

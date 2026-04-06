@@ -6,6 +6,7 @@ pydantic
 fastapi
 uvicorn[standard]
 websockets
+pyzmq
 
 # Database
 sqlalchemy[asyncio]

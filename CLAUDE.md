@@ -14,7 +14,7 @@ Read `docs/albatross.md` first for the big picture. See `docs/albatross.md` for 
 
 ## Current State
 
-All core systems are built: TRM core, Web UI + API, database + data pipeline, and UI restructure. Real data integration (capture, ASR, radio hardware) is not built — it requires physical radio hardware.
+All core systems are built: TRM core, Web UI + API, database + data pipeline, UI restructure, and real capture pipeline. The capture layer (`capture/trunked_radio/`) has all three processes: flowgraph (GNU Radio + OP25, requires hardware), bridge, and backend. ASR/transcription is not built.
 
 The `db/` package has 5 ORM models, Alembic migrations, async session factory, a reset script, and `persist_routing_result()` for atomic TRM writes. The `contracts/` package has boundary types with `to_orm()` mapping to ORM models, plus WebSocket message types in `contracts/ws.py` (including `PipelineStageDefinition` for pipeline observability). The mock pipeline runs as an in-process async pipeline inside the API via `LivePipelineManager` (`api/services/live_pipeline.py`), which inherits from `BasePipelineManager` (`api/services/base_pipeline.py`). It pushes stage-level messages (`packet_captured`, `packet_preprocessed`, `packet_routed`) over WebSocket at `/ws/live/mock`. `PipelineStarted` carries `stages` (list of stage definitions) instead of `total_packets`. The `/live` page hydrates from the database on load via three REST endpoints (`/api/live/threads`, `/events`, `/transmissions`) using TanStack Query, then receives real-time updates via WebSocket — no polling. A `PipelineStages` component shows per-stage packet counts that increment in real time.
 
@@ -53,6 +53,14 @@ The mock pipeline is started from the UI: open `/live/mock` and click "Start Moc
 
 The CLI entry point is `trm/main.py`. The API entry point is `api/main.py` (FastAPI). Both require the venv activated and `.env` with `ANTHROPIC_API_KEY` for live runs. The frontend dev server runs on `localhost:3000` and talks to the API on `localhost:8000`.
 
+```bash
+# Run the real capture pipeline (requires GNU Radio + OP25 + RTL-SDR)
+# Three separate terminals:
+python -m capture.trunked_radio.backend     # Process 3 — backend
+python -m capture.trunked_radio.bridge      # Process 2 — bridge
+python -m capture.trunked_radio.flowgraph   # Process 1 — flowgraph (needs OP25_APPS_DIR env var)
+```
+
 ## Architecture
 
 ### Contracts (`contracts/`)
@@ -62,7 +70,31 @@ Shared Pydantic types for cross-module boundaries. All modules import boundary t
 - **`contracts/models.py`** — `TransmissionPacket` (capture output, with `to_orm()` method), `ProcessedPacket` (TRM input, domain-agnostic), `ReadyPacket` (alias for `ProcessedPacket`), `RoutingRecord` (TRM output, plain string decision fields, with `to_orm()` method).
 - **`contracts/ws.py`** — Pydantic models for live pipeline WebSocket messages: `PipelineStageDefinition`, `PipelineStarted` (carries `stages` list, not `total_packets`), `PacketCaptured`, `PacketPreprocessed`, `PacketRouted`, `PipelineComplete`, `PipelineError`.
 
-### Mock Pipeline (`capture/`, `preprocessing/`, `api/services/live_pipeline.py`)
+### Capture Pipeline (`capture/trunked_radio/`)
+
+Real P25 trunked radio capture — three cooperating OS processes connected by ZMQ. See `docs/sources/trunked_radio/` for full architecture docs.
+
+Shared modules:
+- **`config.py`** — All constants: ZMQ ports (5557 metadata, 5560-5567 PCM lanes, 5580 tagged PCM, 5581 control, 5590 packet push), SDR params (855.75 MHz center, 3.2 Msps, gains), channelizer params (decim=50, 64 kHz channel rate, filter taps), lane manager timing (2s sweep, 5s stale age), `OP25_APPS_DIR` env var, timeouts, WAV dir.
+- **`models.py`** — Internal `@dataclass` types: `MetadataEvent`, `LaneAssignment`, `ActiveCall`, `CompletedCall`. Hot-path models — not Pydantic.
+- **`tsbk.py`** — Standalone P25 TSBK binary parser (`TSBKParser`). Decodes grants, grant updates, identifier updates. Resolves channel IDs to frequencies via freq table. `process_qmsg()` wraps `gr.msg_queue` integration. GPL v3.
+
+Process 1 — Flowgraph (requires GNU Radio + gr-osmosdr + gr-op25 + RTL-SDR):
+- **`lane_manager.py`** — Thread-safe lane allocation. `on_grant(tgid, freq, srcaddr)` assigns/retunes/preempts voice lanes. `sweep_stale(max_age)` releases idle lanes. Pure logic, no GNU Radio dependency.
+- **`metadata_poller.py`** — Daemon thread bridging `gr.msg_queue` → TSBK parser → lane manager → ZMQ PUSH on :5557. Drains msg_queue, annotates grants with `lane_id`, sweeps stale lanes every ~2s.
+- **`flowgraph.py`** — `P25Flowgraph(gr.top_block)`. SDR source → control lane (channelizer → FM demod → `p25_demod_fb` → frame assembler → msg_queue) + 8 voice lanes (→ ZMQ push sinks on :5560-5567). Entry point: `python -m capture.trunked_radio.flowgraph`.
+
+Process 2 — Bridge:
+- **`bridge.py`** — `LaneState` (thread-safe lane→tgid mapping), `MetadataSubscriber` (pulls JSON from :5557, updates LaneState, translates `srcaddr` → `source_unit`, forwards to :5581), `PCMLaneSubscriber` ×8 (pulls PCM from :5560-5567, tags with tgid, pushes multipart to :5580). Entry point: `python -m capture.trunked_radio.bridge`.
+
+Process 3 — Backend:
+- **`buffer_manager.py`** — `BufferManager` call state machine. Tracks active calls by tgid, accumulates PCM chunks, handles grant/lane reassignment, sweep timeouts, drain.
+- **`wav_writer.py`** — `WavWriter` writes mono int16 8000 Hz WAV files from `CompletedCall` audio.
+- **`packet_builder.py`** — `build_packet()` maps `CompletedCall` + WAV path to `TransmissionPacket` (from `contracts.models`).
+- **`packet_sink.py`** — `PacketSink` protocol with three implementations: `ZmqPacketSink` (PUSH to :5590), `StdoutPacketSink`, `JsonlPacketSink`.
+- **`backend.py`** — `CaptureBackend` async event loop. ZMQ poll on PCM + control sockets, periodic sweep, `_finalize_calls` writes WAV + DB + sink. Entry point: `python -m capture.trunked_radio.backend`.
+
+### Mock Pipeline (`capture/mock/`, `preprocessing/`, `api/services/live_pipeline.py`)
 
 The primary mock pipeline runs in-process inside the API via `LivePipelineManager`. Three async stages connected by `PacketQueue`s: capture (reads `packets_radio.json`, writes to DB, emits to queue), preprocessing (simulates ASR, writes to DB, emits to queue), and routing (calls `TRMRouter`, persists via `persist_routing_result`, broadcasts over WebSocket). Started via `POST /api/mock/start`, streams progress to `/ws/live/mock`.
 
@@ -130,7 +162,7 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 58 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), and live pipeline/WebSocket (9 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 99 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), live pipeline/WebSocket (9 tests), TSBK parser (7 tests), buffer manager (7 tests), WAV writer (4 tests), packet builder (5 tests), capture backend (2 tests), bridge (8 tests), and lane manager (8 tests).
 
 ### Key Design Decisions
 
@@ -166,4 +198,6 @@ The augmented dataset for the mock pipeline lives at `data/tier_one/scenario_02_
 | `docs/web/api.md` | Web UI & API architecture — REST endpoints, WebSocket protocol, frontend pages |
 | `docs/web/ui_spec.md` | Visual design spec — design tokens, components, layout |
 | `docs/web/ui_mockup.jsx` | Interactive React mockup — component reference |
+| `docs/sources/trunked_radio/architecture.md` | Capture pipeline — three-process architecture, ZMQ wiring, signal chain |
+| `docs/sources/trunked_radio/hardware.md` | Hardware and software dependencies — GNU Radio, OP25, RTL-SDR, env vars |
 | `docs/vision.md` | What Albatross should become — design intent, not a roadmap |
