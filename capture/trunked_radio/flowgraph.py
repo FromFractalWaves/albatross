@@ -1,13 +1,12 @@
 """P25 trunked radio flowgraph — Process 1.
 
 GNU Radio top_block that tunes an RTL-SDR, decodes the P25 control channel,
-and runs pooled voice channelizers.
+and runs pooled voice demodulators.
 
 Requires: GNU Radio 3.10+, gr-osmosdr, gr-op25 (boatbod fork), RTL-SDR hardware.
 """
 
 import logging
-import math
 import os
 import sys
 
@@ -23,14 +22,11 @@ from capture.trunked_radio.tsbk import TSBKParser
 sys.path.insert(0, config.OP25_APPS_DIR)
 sys.path.insert(0, os.path.join(config.OP25_APPS_DIR, "tx"))
 
-from gnuradio import analog, blocks, filter as gr_filter, gr, zeromq  # noqa: E402
-from gnuradio.fft import window as gr_window  # noqa: E402
+from gnuradio import blocks, gr, zeromq  # noqa: E402
 
 import osmosdr  # noqa: E402
-from gnuradio import op25, op25_repeater  # noqa: E402
+from gnuradio import op25_repeater  # noqa: E402
 from p25_demodulator import p25_demod_cb  # noqa: E402
-
-import op25_c4fm_mod  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +38,10 @@ _SYMBOL_RATE = 4800
 class P25Flowgraph(gr.top_block):
     """GNU Radio flowgraph — SDR source, control + voice lanes.
 
-    Control lane uses p25_demod_cb (complex input, full demod chain with AGC/FLL).
-    Voice lanes use lightweight channelizer → FM demod → FSK4 (no AGC/FLL needed
-    since frequencies are known from grants).
+    Both control and voice lanes use p25_demod_cb (complex input, full demod
+    chain with two-stage decimation, AGC, and FLL). At 3.2 Msps, p25_demod_cb
+    uses efficient BPF(decim=32) → mixer → LPF(decim=4) → arb_resampler,
+    which is ~18x lighter than a single-stage freq_xlating_fir_filter.
     """
 
     def __init__(self):
@@ -84,46 +81,19 @@ class P25Flowgraph(gr.top_block):
 
         self.connect(self.source, ctrl_demod, ctrl_assembler)
 
-        # --- Voice lanes (lightweight channelizer + FM demod + FSK4) ---
-        # Decimate 3.2 MHz → _IF_RATE (24 kHz) per voice channel
-        voice_decim = config.SDR_SAMPLE_RATE // _IF_RATE  # 133
-
-        voice_taps = gr_filter.firdes.low_pass(
-            1,
-            config.SDR_SAMPLE_RATE,
-            _IF_RATE / 2 - 1000,     # 11 kHz cutoff
-            2000,                     # transition
-            gr_window.WIN_HAMMING,
-        )
-
-        # FM demod gain and C4FM symbol filter for voice
-        fm_gain = _IF_RATE / (2 * math.pi * 600.0)  # 600 Hz symbol deviation
-        sps = _IF_RATE // _SYMBOL_RATE  # 5 samples per symbol
-        c4fm_taps = op25_c4fm_mod.c4fm_taps(
-            sample_rate=_IF_RATE, span=9,
-            generator=op25_c4fm_mod.transfer_function_rx,
-        ).generate()
-
-        self.voice_channelizers: dict[int, gr_filter.freq_xlating_fir_filter_ccf] = {}
+        # --- Voice lanes (p25_demod_cb — same two-stage decim as control) ---
+        self.voice_demods: dict[int, p25_demod_cb] = {}
 
         for lane_id in range(config.NUM_LANES):
-            # Channelizer: translate + decimate to _IF_RATE
-            channelizer = gr_filter.freq_xlating_fir_filter_ccf(
-                voice_decim, voice_taps, 0, config.SDR_SAMPLE_RATE,
+            demod = p25_demod_cb(
+                input_rate=config.SDR_SAMPLE_RATE,
+                demod_type='fsk4',
+                relative_freq=0,       # idle — retuned on grant
+                offset=0,
+                if_rate=_IF_RATE,
+                symbol_rate=_SYMBOL_RATE,
             )
 
-            # FM demod
-            fm_demod = analog.quadrature_demod_cf(fm_gain)
-
-            # Baseband amp + C4FM matched filter + FSK4 demod + slicer
-            bb_amp = blocks.multiply_const_ff(1.0)
-            sym_filter = gr_filter.fir_filter_fff(1, c4fm_taps)
-            autotuneq = gr.msg_queue(2)
-            fsk4_demod = op25.fsk4_demod_ff(autotuneq, _IF_RATE, _SYMBOL_RATE)
-            levels = [-2.0, 0.0, 2.0, 4.0]
-            slicer = op25_repeater.fsk4_slicer_fb(0, 0, levels)
-
-            # Frame assembler → PCM output
             voice_queue = gr.msg_queue(2)
             assembler = op25_repeater.p25_frame_assembler(
                 "",        # udp_host
@@ -144,18 +114,18 @@ class P25Flowgraph(gr.top_block):
                 config.ZMQ_SINK_TIMEOUT,
             )
 
-            self.connect(
-                self.source, channelizer, fm_demod,
-                bb_amp, sym_filter, fsk4_demod, slicer,
-                assembler, sink,
-            )
-            self.voice_channelizers[lane_id] = channelizer
+            self.connect(self.source, demod, assembler, sink)
+            self.voice_demods[lane_id] = demod
 
         # --- Lane manager + metadata poller ---
         def _retune(lane_id: int, freq: int) -> None:
-            offset = freq - config.CENTER_FREQ
-            self.voice_channelizers[lane_id].set_center_freq(offset)
-            logger.info("Retuned lane %d → %.4f MHz (offset %+d Hz)", lane_id, freq / 1e6, offset)
+            # OP25 convention: relative_freq = CENTER - CHANNEL
+            relative_freq = config.CENTER_FREQ - freq
+            ok = self.voice_demods[lane_id].set_relative_frequency(relative_freq)
+            if ok:
+                logger.info("Retuned lane %d → %.4f MHz (relative %+d Hz)", lane_id, freq / 1e6, relative_freq)
+            else:
+                logger.warning("Retune FAILED lane %d → %.4f MHz (relative %+d Hz) — out of tunable range", lane_id, freq / 1e6, relative_freq)
 
         self.lane_manager = LaneManager(retune_callback=_retune)
         self.tsbk_parser = TSBKParser()

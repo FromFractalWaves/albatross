@@ -53,7 +53,7 @@ The reference deployment targets a specific P25 system:
 | Protocol | P25 Phase 1 |
 | NAC | 0x01F0 |
 | Control channel | 854.6125 MHz |
-| SDR center frequency | 855.75 MHz |
+| SDR center frequency | 855.9625 MHz |
 | Freq table 0 | base=851.006250 MHz, step=6.250 kHz, offset=-45 MHz |
 | Freq table 1 | base=762.006250 MHz, step=6.250 kHz, offset=+30 MHz |
 | Voice channels observed | 856.0125, 856.3125, 856.3375, 856.9625, 857.3125 MHz |

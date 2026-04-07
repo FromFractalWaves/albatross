@@ -39,7 +39,7 @@ def control_backend_endpoint() -> str:
 
 
 # SDR parameters
-CENTER_FREQ = 855_750_000       # Hz (855.75 MHz)
+CENTER_FREQ = 855_962_500       # Hz (855.9625 MHz) — midpoint of control + voice range
 SDR_SAMPLE_RATE = 3_200_000     # 3.2 Msps
 SDR_RF_GAIN = 30                # dB
 SDR_IF_GAIN = 20                # dB

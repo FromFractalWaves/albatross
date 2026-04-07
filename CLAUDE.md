@@ -76,14 +76,14 @@ Shared Pydantic types for cross-module boundaries. All modules import boundary t
 Real P25 trunked radio capture — three cooperating OS processes connected by ZMQ. See `docs/sources/trunked_radio/` for full architecture docs.
 
 Shared modules:
-- **`config.py`** — All constants: ZMQ ports (5557 metadata, 5560-5567 PCM lanes, 5580 tagged PCM, 5581 control, 5590 packet push), SDR params (855.75 MHz center, 3.2 Msps, gains), lane manager timing (2s sweep, 5s stale age), `OP25_APPS_DIR` env var, timeouts, WAV dir.
+- **`config.py`** — All constants: ZMQ ports (5557 metadata, 5560-5567 PCM lanes, 5580 tagged PCM, 5581 control, 5590 packet push), SDR params (855.9625 MHz center, 3.2 Msps, gains), lane manager timing (2s sweep, 5s stale age), `OP25_APPS_DIR` env var, timeouts, WAV dir.
 - **`models.py`** — Internal `@dataclass` types: `MetadataEvent`, `LaneAssignment`, `ActiveCall`, `CompletedCall`. Hot-path models — not Pydantic.
 - **`tsbk.py`** — Standalone P25 TSBK parser (`TSBKParser`). Decodes grants, grant updates, identifier updates using 96-bit integer extraction matching OP25's `tk_p25.py` convention. Resolves channel IDs to frequencies via freq table. `process_qmsg()` handles OP25 `msg_queue` wire format (packed type field, bytes payload). GPL v3.
 
 Process 1 — Flowgraph (requires GNU Radio + gr-osmosdr + gr-op25 + RTL-SDR):
 - **`lane_manager.py`** — Thread-safe lane allocation. `on_grant(tgid, freq, srcaddr)` assigns/retunes/preempts voice lanes. `sweep_stale(max_age)` releases idle lanes. Pure logic, no GNU Radio dependency.
 - **`metadata_poller.py`** — Daemon thread bridging `gr.msg_queue` → TSBK parser → lane manager → ZMQ PUSH on :5557. Drains msg_queue, annotates grants with `lane_id`, sweeps stale lanes every ~2s. Logs 10s status summaries with message/TSBK/decoded counts.
-- **`flowgraph.py`** — `P25Flowgraph(gr.top_block)`. SDR source → control lane (`p25_demod_cb` with AGC/FLL → `p25_frame_assembler` → msg_queue) + 8 voice lanes (channelizer → FM demod → FSK4 → `p25_frame_assembler` → ZMQ push sinks on :5560-5567). Control uses OP25's heavy demod for robust lock; voice uses lightweight channelizer chain. Entry point: `python3 -m capture.trunked_radio.flowgraph`. **Note:** CPU budget issue with 8 voice lanes on laptop hardware — see `specs/radio_integration.md`.
+- **`flowgraph.py`** — `P25Flowgraph(gr.top_block)`. SDR source → control lane (`p25_demod_cb` → `p25_frame_assembler` → msg_queue) + 3 voice lanes (`p25_demod_cb` → `p25_frame_assembler` → ZMQ push sinks on :5560-5562). Both control and voice use `p25_demod_cb` which has efficient two-stage decimation (BPF decim=32 → mixer → LPF decim=4 → arb_resampler). Entry point: `python3 -m capture.trunked_radio.flowgraph`.
 
 Process 2 — Bridge:
 - **`bridge.py`** — `LaneState` (thread-safe lane→tgid mapping), `MetadataSubscriber` (pulls JSON from :5557, updates LaneState, translates `srcaddr` → `source_unit`, forwards to :5581), `PCMLaneSubscriber` ×8 (pulls PCM from :5560-5567, tags with tgid, pushes multipart to :5580). Entry point: `python -m capture.trunked_radio.bridge`.

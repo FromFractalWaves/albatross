@@ -37,7 +37,7 @@ GNU Radio `gr.top_block` subclass (`P25Flowgraph`). Requires GNU Radio 3.10+, gr
 
 ### Signal Chain
 
-**SDR source:** `osmosdr.source()` centered at 855.75 MHz, 3.2 Msps. RF gain 30 dB, IF gain 20 dB, BB gain 20 dB. The center frequency is between the control channel (854.6125 MHz) and voice channels (856-857 MHz) so both fall within the visible band.
+**SDR source:** `osmosdr.source()` centered at 855.9625 MHz, 3.2 Msps. RF gain 30 dB, IF gain 20 dB, BB gain 20 dB. The center frequency is the midpoint of the control channel (854.6125 MHz) and the highest voice channel (857.3125 MHz), giving all channels equal margin within `p25_demod_cb`'s tunable range (max offset = 1.55 MHz, worst-case offset = 1.35 MHz).
 
 **Control lane** — uses `p25_demod_cb` (OP25's complex-input demodulator with AGC, FLL, and full symbol recovery). This is the heavy demod chain but provides robust lock on the continuously-broadcasting control channel:
 
@@ -52,22 +52,18 @@ The `relative_freq` follows OP25's convention: `CENTER_FREQ - CONTROL_FREQ` (pos
 
 The frame assembler writes P25 frames into the message queue. DUID 7 messages are TSBKs (12 bytes: 2-byte NAC + 10-byte body, CRC stripped by OP25).
 
-**Voice lanes** (8 pooled, dynamically retuned) — use a lightweight chain to avoid CPU overload. Each voice lane has:
+**Voice lanes** (3 pooled, dynamically retuned) — use the same `p25_demod_cb` as the control channel:
 
 ```
-source → freq_xlating_fir_filter_ccf(decim=133, offset=0 initially)
-       → quadrature_demod_cf(gain = 24000 / (2pi × 600))
-       → multiply_const_ff(1.0)
-       → fir_filter_fff(c4fm_taps)
-       → fsk4_demod_ff(if_rate=24000, symbol_rate=4800)
-       → fsk4_slicer_fb(levels=[-2, 0, 2, 4])
+source → p25_demod_cb(input_rate=3200000, demod_type='fsk4',
+                       relative_freq=0, if_rate=24000)
        → p25_frame_assembler(do_output=True, do_audio_output=True)
        → zeromq.push_sink(sizeof_short, tcp://*:5560+lane_id, timeout=100ms)
 ```
 
-Voice lanes start at offset 0 (idle). The LaneManager retunes them via `channelizer.set_center_freq(freq - center)` when channel grants arrive.
+Voice lanes start at relative_freq 0 (idle). The LaneManager retunes them via `demod.set_relative_frequency(center - freq)` when channel grants arrive (OP25 convention: positive when channel is below center).
 
-**CPU budget:** The control lane's `p25_demod_cb` is expensive (processes full 3.2 Msps internally) but there is only one. Voice lanes use a `freq_xlating_fir_filter` to decimate to 24 kHz first, then do all symbol processing at the low rate. This is critical — running 8+ copies of `p25_demod_cb` at 3.2 Msps causes GNU Radio buffer overflows on laptop hardware. See `specs/radio_integration.md` for the current CPU budget issue and planned resolution.
+**CPU budget:** Both control and voice lanes use `p25_demod_cb`, which has efficient two-stage decimation built in (BPF decim=32 → 100 kHz, then LPF decim=4 → 25 kHz, then arb_resampler → 24 kHz). The BPF at the input rate has ~200 taps at 100 kHz bandwidth, vs ~3,855 taps for a single-stage `freq_xlating_fir_filter` with 11 kHz cutoff at 3.2 MHz — roughly 18x less work per voice lane. Lane count is 3 (sufficient for DeKalb County traffic volume).
 
 ### LaneManager
 
@@ -75,7 +71,7 @@ Pure logic, no GNU Radio dependency. Thread-safe (all methods locked).
 
 - `on_grant(tgid, freq, srcaddr) -> lane_id | None` — Existing tgid: update/retune. Same freq: preempt. Else allocate free. Else drop (pool exhausted).
 - `sweep_stale(max_age=5.0) -> list[released_tgids]` — Releases lanes not seen in grant stream for `max_age` seconds. P25 control channel rebroadcasts active grants every ~1-2s, so absence is a reliable end-of-call signal.
-- Retune callback wired by the flowgraph to `voice_channelizer.set_center_freq(freq - center_freq)`.
+- Retune callback wired by the flowgraph to `voice_demod.set_relative_frequency(center_freq - freq)`.
 
 ### MetadataPoller
 
