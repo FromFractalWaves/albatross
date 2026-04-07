@@ -107,7 +107,7 @@ Part 1: Raw int16 PCM bytes
 
 Accumulates PCM per talkgroup, detects call boundaries, writes WAV files, emits packets.
 
-**BufferManager** — In-memory call state machine keyed by tgid. Opens `ActiveCall` on grant or first PCM. Appends PCM chunks. Closes to `CompletedCall` on inactivity timeout (1.5s) or lane reassignment.
+**BufferManager** — In-memory call state machine keyed by tgid. Opens `ActiveCall` on grant or first PCM. Appends PCM chunks. Closes to `CompletedCall` on inactivity timeout (1.5s), lane reassignment, or source unit change (different radio keys up on same tgid).
 
 **WAV Writer** — Writes `CompletedCall` audio as mono int16 WAV (8000 Hz). Filename: `{ISO8601}_{tgid}_{source_unit}_{uuid}.wav`.
 

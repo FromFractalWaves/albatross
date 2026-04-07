@@ -33,15 +33,27 @@ class BufferManager:
             return closed
 
         if event.tgid in self.active_calls:
-            # Update existing call metadata
             call = self.active_calls[event.tgid]
-            if event.frequency is not None:
-                call.frequency = event.frequency
-            if event.source_unit is not None:
-                call.source_unit = event.source_unit
-            if event.lane_id is not None:
-                call.lane_id = event.lane_id
-        else:
+
+            # Source unit changed on same tgid → different radio keyed up
+            if (
+                event.source_unit is not None
+                and event.source_unit != call.source_unit
+                and call.pcm_chunks
+            ):
+                closed.append(self._close_call(event.tgid, "source_changed"))
+                # Fall through to open a new call below
+            else:
+                # Update existing call metadata
+                if event.frequency is not None:
+                    call.frequency = event.frequency
+                if event.source_unit is not None:
+                    call.source_unit = event.source_unit
+                if event.lane_id is not None:
+                    call.lane_id = event.lane_id
+                return closed
+
+        if event.tgid not in self.active_calls:
             # Open new call
             self.active_calls[event.tgid] = ActiveCall(
                 tgid=event.tgid,

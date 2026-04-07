@@ -96,3 +96,77 @@ class TestBufferManager:
 
         closed = bm.sweep(now + 0.1, timeout=1.5)
         assert closed == []
+
+    def test_source_change_splits_call(self):
+        bm = BufferManager()
+        now = time.time()
+        bm.handle_pcm(tgid=100, pcm_data=b"\x00" * 320, lane_id=1,
+                       frequency=851000000, source_unit=10, timestamp=now)
+
+        # Different radio keys up on same tgid
+        event = _grant_event(tgid=100, lane_id=1, source_unit=20, ts=now + 1.0)
+        closed = bm.handle_metadata(event)
+
+        assert len(closed) == 1
+        assert closed[0].tgid == 100
+        assert closed[0].end_reason == "source_changed"
+        assert closed[0].source_unit == 10
+        # New call opened with new source_unit
+        assert 100 in bm.active_calls
+        assert bm.active_calls[100].source_unit == 20
+
+    def test_source_none_no_split(self):
+        bm = BufferManager()
+        now = time.time()
+        bm.handle_pcm(tgid=100, pcm_data=b"\x00" * 320, lane_id=1,
+                       frequency=851000000, source_unit=10, timestamp=now)
+
+        # Grant with source_unit=None should not split
+        event = _grant_event(tgid=100, lane_id=1, source_unit=None, ts=now + 1.0)
+        closed = bm.handle_metadata(event)
+
+        assert closed == []
+        assert bm.active_calls[100].source_unit == 10
+
+    def test_grant_update_no_split(self):
+        bm = BufferManager()
+        now = time.time()
+        bm.handle_pcm(tgid=100, pcm_data=b"\x00" * 320, lane_id=1,
+                       frequency=851000000, source_unit=10, timestamp=now)
+
+        # grant_update carries no srcaddr (source_unit=None)
+        event = MetadataEvent(
+            type="grant_update", tgid=100, frequency=851000000,
+            source_unit=None, lane_id=1, timestamp=now + 1.0,
+        )
+        closed = bm.handle_metadata(event)
+
+        assert closed == []
+        assert bm.active_calls[100].source_unit == 10
+
+    def test_source_change_no_pcm_no_split(self):
+        bm = BufferManager()
+        now = time.time()
+        # Open call via grant — no PCM yet
+        event1 = _grant_event(tgid=100, lane_id=1, source_unit=10, ts=now)
+        bm.handle_metadata(event1)
+
+        # Different source_unit but no PCM — should update, not split
+        event2 = _grant_event(tgid=100, lane_id=1, source_unit=20, ts=now + 1.0)
+        closed = bm.handle_metadata(event2)
+
+        assert closed == []
+        assert bm.active_calls[100].source_unit == 20
+
+    def test_same_source_no_split(self):
+        bm = BufferManager()
+        now = time.time()
+        bm.handle_pcm(tgid=100, pcm_data=b"\x00" * 320, lane_id=1,
+                       frequency=851000000, source_unit=10, timestamp=now)
+
+        # Same radio re-grants — should not split
+        event = _grant_event(tgid=100, lane_id=1, source_unit=10, ts=now + 1.0)
+        closed = bm.handle_metadata(event)
+
+        assert closed == []
+        assert 100 in bm.active_calls

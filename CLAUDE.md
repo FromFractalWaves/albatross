@@ -89,7 +89,7 @@ Process 2 — Bridge:
 - **`bridge.py`** — `LaneState` (thread-safe lane→tgid mapping), `MetadataSubscriber` (pulls JSON from :5557, updates LaneState, translates `srcaddr` → `source_unit`, forwards to :5581), `PCMLaneSubscriber` ×8 (pulls PCM from :5560-5567, tags with tgid, pushes multipart to :5580). Entry point: `python -m capture.trunked_radio.bridge`.
 
 Process 3 — Backend:
-- **`buffer_manager.py`** — `BufferManager` call state machine. Tracks active calls by tgid, accumulates PCM chunks, handles grant/lane reassignment, sweep timeouts, drain.
+- **`buffer_manager.py`** — `BufferManager` call state machine. Tracks active calls by tgid, accumulates PCM chunks, handles grant/lane reassignment, source unit change splitting, sweep timeouts, drain.
 - **`wav_writer.py`** — `WavWriter` writes mono int16 8000 Hz WAV files from `CompletedCall` audio.
 - **`packet_builder.py`** — `build_packet()` maps `CompletedCall` + WAV path to `TransmissionPacket` (from `contracts.models`).
 - **`packet_sink.py`** — `PacketSink` protocol with three implementations: `ZmqPacketSink` (PUSH to :5590), `StdoutPacketSink`, `JsonlPacketSink`.
@@ -163,7 +163,7 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 99 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), live pipeline/WebSocket (9 tests), TSBK parser (7 tests), buffer manager (7 tests), WAV writer (4 tests), packet builder (5 tests), capture backend (2 tests), bridge (8 tests), and lane manager (8 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 104 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), live pipeline/WebSocket (9 tests), TSBK parser (7 tests), buffer manager (12 tests), WAV writer (4 tests), packet builder (5 tests), capture backend (2 tests), bridge (8 tests), and lane manager (8 tests).
 
 ### Key Design Decisions
 
