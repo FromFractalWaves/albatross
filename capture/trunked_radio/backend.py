@@ -49,8 +49,13 @@ class CaptureBackend:
                 events = dict(await poller.poll(timeout=config.POLL_TIMEOUT))
 
                 if pcm_socket in events:
-                    frames = await pcm_socket.recv_multipart()
-                    await self._handle_pcm(frames)
+                    # Drain all pending PCM before processing metadata
+                    # so split-triggering grants don't discard buffered audio
+                    while True:
+                        frames = await pcm_socket.recv_multipart()
+                        await self._handle_pcm(frames)
+                        if not await pcm_socket.poll(0):
+                            break
 
                 if control_socket in events:
                     data = await control_socket.recv()
@@ -108,6 +113,12 @@ class CaptureBackend:
 
     async def _finalize_calls(self, calls: list[CompletedCall]) -> None:
         for call in calls:
+            if not call.audio_bytes:
+                logger.debug(
+                    "Skipping empty call tgid=%d lane=%d reason=%s",
+                    call.tgid, call.lane_id, call.end_reason,
+                )
+                continue
             try:
                 wav_path = self.wav_writer.write(call)
                 packet = build_packet(call, wav_path)

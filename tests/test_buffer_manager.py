@@ -158,6 +158,20 @@ class TestBufferManager:
         assert closed == []
         assert bm.active_calls[100].source_unit == 20
 
+    def test_source_change_from_none_no_split(self):
+        bm = BufferManager()
+        now = time.time()
+        # Call opened by PCM with no source_unit
+        bm.handle_pcm(tgid=100, pcm_data=b"\x00" * 320, lane_id=1,
+                       frequency=851000000, source_unit=None, timestamp=now)
+
+        # Grant arrives identifying the speaker — not a speaker change
+        event = _grant_event(tgid=100, lane_id=1, source_unit=42, ts=now + 0.5)
+        closed = bm.handle_metadata(event)
+
+        assert closed == []
+        assert bm.active_calls[100].source_unit == 42
+
     def test_same_source_no_split(self):
         bm = BufferManager()
         now = time.time()

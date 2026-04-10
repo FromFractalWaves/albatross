@@ -38,6 +38,7 @@ class BufferManager:
             # Source unit changed on same tgid → different radio keyed up
             if (
                 event.source_unit is not None
+                and call.source_unit is not None
                 and event.source_unit != call.source_unit
                 and call.pcm_chunks
             ):

@@ -163,7 +163,7 @@ Next.js (TypeScript, App Router) frontend with a visual dashboard for watching t
 
 ### Tests (`tests/`)
 
-Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 104 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), live pipeline/WebSocket (9 tests), TSBK parser (7 tests), buffer manager (12 tests), WAV writer (4 tests), packet builder (5 tests), capture backend (2 tests), bridge (8 tests), and lane manager (8 tests).
+Run with `python -m pytest tests/ -v`. LLM calls are mocked so no API key is needed. 105 tests total: contracts layer (5 tests), mock pipeline (3 tests), scenario endpoints (9 tests), run/WebSocket flow (7 tests), database models (7 tests), TRM persistence (5 tests), live API endpoints (7 tests), mock pipeline API (6 tests), live pipeline/WebSocket (9 tests), TSBK parser (7 tests), buffer manager (13 tests), WAV writer (4 tests), packet builder (5 tests), capture backend (2 tests), bridge (8 tests), and lane manager (8 tests).
 
 ### Key Design Decisions
 
